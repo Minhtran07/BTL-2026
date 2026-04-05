@@ -61,7 +61,7 @@ public abstract class User extends Entity{
     /**
      * Phương thức trừu tượng trả về vai trò người dùng - Polymorphism.
      */
-    public abstract class UserRole getRole();
+    public abstract UserRole getRole();
     @Override
     public String printInfo(){
         return String.format("User[id=%s, username=%s, role=%s, email=%s, fullName=%s]",getId(), username, getRole(), email, fullName );
