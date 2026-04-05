@@ -1,4 +1,5 @@
 package com.auction.model.entity;
 
-public class Entity {
+public abstract class Entity {
+
 }
