@@ -64,7 +64,7 @@ public abstract class User extends Entity{
     public abstract class UserRole getRole();
     @Override
     public String printInfo(){
-        return String.format("User[id=%s, username=%s, role=%s, email=%s, fullName=%s]",getId(), username, getRole(), email, fullName);
+        return String.format("User[id=%s, username=%s, role=%s, email=%s, fullName=%s]",getId(), username, getRole(), email, fullName );
 
     }
 
