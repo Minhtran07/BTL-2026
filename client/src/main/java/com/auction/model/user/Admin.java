@@ -23,6 +23,6 @@ public class Admin extends User {
 
     @Override
     public String printInfo() {
-        return String.format("Admin[id=%s, username=%s]", getId(), getUsername());
+        return String.format("Admin[id=%s, username=%s]", getId(), getUsername() );
     }
 }
