@@ -5,9 +5,9 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
-public abstract class Entity implements Serializable { // Đã sửa lỗi 1 & 2
+public abstract class Entity implements Serializable {
 
-    private static final long serialVersionUID = 1L; // Đã sửa lỗi 3
+    private static final long serialVersionUID = 1L;
 
     private final String id;
     private final LocalDateTime createdAt;
