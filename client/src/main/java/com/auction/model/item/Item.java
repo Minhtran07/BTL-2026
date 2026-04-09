@@ -2,7 +2,7 @@ package com.auction.model.item;
 
 import com.auction.model.entity.Entity;
 
-public abstract class  Item extends Entity{
+public abstract class Item extends Entity{
 
     static final long serialVersionUID = 1L;
     private String name;
