@@ -2,7 +2,7 @@ package com.auction.model.item;
 
 
 // enum cho danh mục các sản phẩm hiện có của sàn
-public enum ItemCategory  {
+public enum ItemCategory {
     ELECTRONICS("Điện tử"),
     ART("Nghệ thuật"),
     VEHICLE("Phương tiện"),
