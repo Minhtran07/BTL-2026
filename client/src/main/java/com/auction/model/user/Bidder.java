@@ -6,6 +6,7 @@ import java.util.List;
 /**
  * Lớp Bidder - người tham gia đấu giá.
  * Kế thừa User, override getRole() - Polymorphism.
+ *
  */
 public class Bidder extends User {
 
