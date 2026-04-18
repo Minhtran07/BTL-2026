@@ -1,5 +1,8 @@
 package com.auction.model.item;
-
+/**
+ * Lớp Electronics - sản phẩm điện tử.
+ * Kế thừa Item - Inheritance & Polymorphism.
+ */
 public class Electronics extends Item {
     private static final long  serialVersionUID = 1L;
 

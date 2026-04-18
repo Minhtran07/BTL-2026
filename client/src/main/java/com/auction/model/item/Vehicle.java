@@ -1,5 +1,8 @@
 package com.auction.model.item;
-
+/**
+ * Lớp Vehicle - phương tiện.
+ * Kế thừa Item - Inheritance & Polymorphism.
+ */
 public class Vehicle extends Item{
     private static final long  serialVersionUID =1L;
 
