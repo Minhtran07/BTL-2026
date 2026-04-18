@@ -1,4 +1,8 @@
 package com.auction.model.item;
+/**
+ * Lớp Art - sản phẩm nghệ thuật.
+ * Kế thừa Item - Inheritance & Polymorphism.
+ */
 
 public class Art extends Item{
 

@@ -2,6 +2,10 @@ package com.auction.model.item;
 
 import com.auction.model.entity.Entity;
 
+/**
+ * Lớp trừu tượng Item - sản phẩm đấu giá.
+ * Kế thừa Entity, là lớp cha cho Electronics, Art, Vehicle.
+ */
 public abstract class  Item extends Entity{
 
     static final long serialVersionUID = 1L;
