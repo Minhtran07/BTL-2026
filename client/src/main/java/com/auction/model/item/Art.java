@@ -2,7 +2,7 @@ package com.auction.model.item;
 
 public class Art extends Item{
 
-    private static final longserialVersionUID = 1L;
+    private static final  longserialVersionUID = 1L;
 
     private String artist;
     private int years;
