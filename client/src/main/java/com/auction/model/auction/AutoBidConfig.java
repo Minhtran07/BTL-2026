@@ -50,6 +50,6 @@ public class AutoBidConfig implements Serializable {
     @Override
     public String toString() {
         return String.format("AutoBid[bidder=%s, maxBid=%.2f, increment=%.2f]",
-                bidderName, maxBid, increment);
+                 bidderName, maxBid, increment);
     }
 }
