@@ -5,7 +5,7 @@ import com.auction.model.transaction.BidTransaction;
 /**
  * Sự kiện đấu giá - dùng trong Observer Pattern.
  */
-public class Auction {
+public class AuctionEvent {
 
     public enum EventType {
         NEW_BID,
