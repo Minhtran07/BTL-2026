@@ -54,12 +54,12 @@ public class AuctionManager {
                 for (Auction auction : auctions.values()) {
                     // Tự động bắt đầu phiên khi đến giờ
                     if (auction.getStatus() == AuctionStatus.OPEN
-                            && now.isAfter(auction.getStartTime())) {
+                        && now.isAfter(auction.getStartTime())) {
                         auction.start();
                     }
                     // Tự động đóng phiên khi hết thời gian
                     if (auction.getStatus() == AuctionStatus.RUNNING
-                            && now.isAfter(auction.getEndTime())) {
+                        && now.isAfter(auction.getEndTime())) {
                         auction.finish();
                     }
                 }
@@ -106,14 +106,14 @@ public class AuctionManager {
 
     public List<Auction> getActiveAuctions() {
         return auctions.values().stream()
-                .filter(a -> a.getStatus() == AuctionStatus.RUNNING)
-                .collect(Collectors.toList());
+            .filter(a -> a.getStatus() == AuctionStatus.RUNNING)
+            .collect(Collectors.toList());
     }
 
     public List<Auction> getAuctionsBySeller(String sellerId) {
         return auctions.values().stream()
-                .filter(a -> a.getSellerId().equals(sellerId))
-                .collect(Collectors.toList());
+            .filter(a -> a.getSellerId().equals(sellerId))
+            .collect(Collectors.toList());
     }
 
     public void shutdown() {
