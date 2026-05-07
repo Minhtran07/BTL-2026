@@ -84,6 +84,7 @@ public class AuctionManager {
                 auctions.put(loadedAuction.getId(), loadedAuction);
             } else {
                 // Cập nhật các trường có thể thay đổi
+                // Không thay đổi ReentrantLock
                 existing.setStatus(loadedAuction.getStatus());
                 if (loadedAuction.getEndTime() != null) {
                     existing.setEndTime(loadedAuction.getEndTime());
