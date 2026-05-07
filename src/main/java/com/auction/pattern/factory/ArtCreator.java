@@ -15,7 +15,7 @@ public class ArtCreator implements ItemCreator {
     public Item create(String name, String desc, double price,
                        String sellerId, Map<String, String> extra) {
         String artist = extra.getOrDefault("artist", "Unknown");
-        int    year   = parseIntOrDefault(extra.get("year"), 2024);
+        int    year   = parseIntOrDefault(extra.get("year"), 2026);
         String medium = extra.getOrDefault("medium", "Mixed");
         return new Art(name, desc, price, sellerId, artist, year, medium);
     }
