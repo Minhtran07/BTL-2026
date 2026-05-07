@@ -1,4 +1,6 @@
 package com.auction.model.user;
+
+
 /**
  * Enum định nghĩa các vai trò người dùng trong hệ thống.
  */
@@ -8,11 +10,12 @@ public enum UserRole {
     ADMIN("Admin");
 
     private final String displayName;
-    UserRole(String displayName){
+
+    UserRole(String displayName) {
         this.displayName = displayName;
     }
-    public String getDisplayName(){
+
+    public String getDisplayName() {
         return displayName;
     }
-
 }
