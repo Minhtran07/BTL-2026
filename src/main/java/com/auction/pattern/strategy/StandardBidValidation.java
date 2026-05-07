@@ -4,7 +4,7 @@ import com.auction.model.auction.Auction;
 import com.auction.model.auction.AuctionStatus;
 
 /**
- * Chiến lược xác thực giá đấu tiêu chuẩn.
+ * xác thực giá đấu tiêu chuẩn.
  *
  * <p>Các điều kiện kiểm tra (theo thứ tự):
  * <ol>
