@@ -10,12 +10,12 @@ public class Seller extends User{
     public static final long serialVersionUID = 1L;
     private final List<String> listedItemIds;
     private double totalRevenue;
-    public Seller(){
+    public Seller() {
         super();
         this.listedItemIds = new ArrayList<>();
         this.totalRevenue = 0.0;
     }
-    public Seller(String username, String password, String email, String fullName){
+    public Seller(String username, String password, String email, String fullName) {
         super(username, password, email, fullName);
         this.listedItemIds = new ArrayList<>();
         this.totalRevenue = 0.0;

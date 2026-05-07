@@ -7,7 +7,7 @@ import com.auction.model.entity.Entity;
  * Áp dụng Inheritance và Encapsulation.
  */
 
-public abstract class User extends Entity{
+public abstract class User extends Entity {
     private static final long serialVersionUID = 1L;
     private String username;
     private String password;
