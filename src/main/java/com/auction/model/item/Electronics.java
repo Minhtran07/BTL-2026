@@ -31,7 +31,7 @@ public class Electronics extends Item {
     public String getModel(){return model;}
     public void setModel(String model){this.model=model;}
 
-    public String getCondition(){return condition;}
+    public String getCondition() {return condition;}
     public void setCondition(String condition){this.condition = condition;}
 
     @Override
