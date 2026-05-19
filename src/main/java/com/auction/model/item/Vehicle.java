@@ -1,40 +1,76 @@
 package com.auction.model.item;
+
+
 /**
  * Lớp Vehicle - phương tiện.
  * Kế thừa Item - Inheritance & Polymorphism.
  */
-public class Vehicle extends Item{
-    private static final long  serialVersionUID =1L;
+public class Vehicle extends Item {
+
+    private static final long serialVersionUID = 1L;
 
     private String make;
     private String vehicleModel;
-    private int years;
+    private int year;
     private int mileage;
 
-    public Vehicle(){super();}
+    public Vehicle() {
+        super();
+    }
 
-    public Vehicle(String name,String description,double startingPrice,String sellerId,
-                   String make,String vehicleModel, int years, int mileage){
+    public Vehicle(String name, String description, double startingPrice,
+                   String sellerId, String make, String vehicleModel, int year, int mileage) {
         super(name, description, startingPrice, sellerId);
         this.make = make;
-        this.vehicleModel =vehicleModel;
+        this.vehicleModel = vehicleModel;
+        this.year = year;
         this.mileage = mileage;
     }
 
     @Override
-    public ItemCategory getCategory(){
+    public ItemCategory getCategory() {
         return ItemCategory.VEHICLE;
     }
 
-    public String getMake(){return make;}
-    public void setMake(String make){this.make = make;}
+    public String getMake() {
+        return make;
+    }
 
-    public String getVehicleModel(){return vehicleModel;}
-    public void setVehicleModel(){this.vehicleModel = vehicleModel;}
+    public void setMake(String make) {
+        this.make = make;
+        markUpdated();
+    }
 
-    public int getYears(){return  years;}
-    public void setYears(int years){this.years=years;}
+    public String getVehicleModel() {
+        return vehicleModel;
+    }
 
-    public int getMileage(){return  mileage;}
-    public void setVehicleModel(int mileage){this.mileage = mileage;}
+    public void setVehicleModel(String vehicleModel) {
+        this.vehicleModel = vehicleModel;
+        markUpdated();
+    }
+
+    public int getYear() {
+        return year;
+    }
+
+    public void setYear(int year) {
+        this.year = year;
+        markUpdated();
+    }
+
+    public int getMileage() {
+        return mileage;
+    }
+
+    public void setMileage(int mileage) {
+        this.mileage = mileage;
+        markUpdated();
+    }
+
+    @Override
+    public String printInfo() {
+        return String.format("Vehicle[id=%s, name=%s, make=%s, model=%s, year=%d, mileage=%dkm, price=%.2f]",
+                getId(), getName(), make, vehicleModel, year, mileage, getStartingPrice());
+    }
 }
