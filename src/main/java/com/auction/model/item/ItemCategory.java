@@ -1,9 +1,9 @@
 package com.auction.model.item;
+
 /**
  * Enum danh mục sản phẩm.
  */
-
-public enum ItemCategory   {
+public enum ItemCategory {
     ELECTRONICS("Điện tử"),
     ART("Nghệ thuật"),
     VEHICLE("Phương tiện"),
@@ -11,11 +11,11 @@ public enum ItemCategory   {
 
     private final String displayName;
 
-    ItemCategory(String displayName){
+    ItemCategory(String displayName) {
         this.displayName = displayName;
     }
 
-    public String getDisplayName(){
+    public String getDisplayName() {
         return displayName;
     }
 }
