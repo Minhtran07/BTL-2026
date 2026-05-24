@@ -157,7 +157,7 @@ public class UserService {
         return user;
     }
 
-    // ===== CÁC METHOD HELPER ĐƠN GIẢN =====
+    // ===== METHOD HELPERS =====
 
     public Optional<User> findById(String id) {
         return userDao.findById(id);
