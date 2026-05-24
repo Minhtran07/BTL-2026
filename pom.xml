@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.auction</groupId>
+    <artifactId>auction-system</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Online Auction System</name>
+    <description>Hệ thống đấu giá trực tuyến - Bài tập lớn Lập trình nâng cao</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <javafx.version>21</javafx.version>
+        <junit.version>5.10.2</junit.version>
+        <jacoco.version>0.8.12</jacoco.version>
+        <checkstyle.plugin.version>3.3.1</checkstyle.plugin.version>
+        <checkstyle.version>10.17.0</checkstyle.version>
+        <coverage.minimum>0.60</coverage.minimum>
+    </properties>
+
+    <dependencies>
+        <!-- JavaFX -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- Gson for JSON serialization -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
+        </dependency>
+
+        <!-- SQLite JDBC driver -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.45.3.0</version>
+        </dependency>
+
+        <!-- JUnit 5 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                </configuration>
+            </plugin>
+
+            <!-- JavaFX Maven Plugin -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.auction.MainApp</mainClass>
+                    <options>
+                        <option>--enable-native-access=ALL-UNNAMED</option>
+                    </options>
+                </configuration>
+            </plugin>
+
+            <!-- Exec plugin to run AuctionServer easily -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>com.auction.network.server.AuctionServer</mainClass>
+                </configuration>
+            </plugin>
+
+            <!-- Surefire for JUnit.
+                 useModulePath=false: chạy test trên classpath (không phải module path)
+                 để tránh lỗi "Module javafx.graphics not found" khi JavaFX không được
+                 nạp đầy đủ vào module path lúc test. Code production (chạy qua
+                 javafx-maven-plugin) vẫn dùng module path bình thường. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.1.2</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <argLine>@{argLine}</argLine>
+                </configuration>
+            </plugin>
+
+            <!-- ================================================================
+                 JaCoCo Code Coverage
+                 - Prepare agent trước test, sinh report sau test
+                 - Yêu cầu coverage tối thiểu 60% (instruction)
+                 - Loại trừ các package thuần UI/IO (controller, view, network,
+                   MainApp, fxml controllers) khỏi check vì chúng đòi hỏi JavaFX
+                   runtime / socket thật để test.
+                 ================================================================ -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check-coverage</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${coverage.minimum}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+                <configuration>
+                    <excludes>
+                        <!-- Entry point + UI controllers + network: cần JavaFX runtime / socket thật để test -->
+                        <exclude>com/auction/MainApp.*</exclude>
+                        <exclude>com/auction/controller/**</exclude>
+                        <exclude>com/auction/network/**</exclude>
+                        <!-- DAO/SQLite: cần DB thật, test phải dùng integration test -->
+                        <exclude>com/auction/dao/DatabaseManager.*</exclude>
+                        <exclude>com/auction/dao/AuctionDaoImpl.*</exclude>
+                        <exclude>com/auction/dao/ItemDaoImpl.*</exclude>
+                        <exclude>com/auction/dao/UserDaoImpl.*</exclude>
+                        <!-- SessionManager là static state holder cho UI thread -->
+                        <exclude>com/auction/SessionManager.*</exclude>
+                        <!-- Exception classes: chỉ là DTO của lỗi, không có business logic -->
+                        <exclude>com/auction/exception/**</exclude>
+                        <!-- AuctionManager singleton: chứa scheduler chạy ngầm, khó test deterministic -->
+                        <exclude>com/auction/pattern/singleton/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- ================================================================
+                 Checkstyle - Google Checks
+                 - Sử dụng google_checks.xml chuẩn của Checkstyle 10.x (bundled)
+                 - Chạy ở phase verify, fail build nếu còn violation
+                 - Suppression file: checkstyle-suppressions.xml (cấp root project)
+                   chứa các rule bị tắt + lý do cụ thể
+                 - violationSeverity=error: chỉ ERROR-level mới fail
+                 ================================================================ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle.plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+                <!-- Configuration ở cấp plugin để cả CLI (mvn checkstyle:check)
+                     lẫn execution (mvn verify) đều dùng Google config + suppressions.
+                     Nếu chỉ đặt trong <execution>, CLI sẽ fallback về sun_checks.xml. -->
+                <configuration>
+                    <configLocation>google_checks.xml</configLocation>
+                    <suppressionsLocation>checkstyle-suppressions.xml</suppressionsLocation>
+                    <suppressionsFileExpression>checkstyle.suppressions.file</suppressionsFileExpression>
+                    <consoleOutput>true</consoleOutput>
+                    <failsOnError>true</failsOnError>
+                    <failOnViolation>true</failOnViolation>
+                    <includeTestSourceDirectory>false</includeTestSourceDirectory>
+                    <linkXRef>false</linkXRef>
+                    <violationSeverity>error</violationSeverity>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>checkstyle-verify</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
