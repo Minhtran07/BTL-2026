@@ -31,8 +31,7 @@ import java.util.Optional;
  *
  * <p><b>Vai trò:</b> đóng vai trò facade giữa tầng UI/controller và tầng
  * domain/DAO. Service không tự cache state mà uỷ thác cho {@link AuctionManager}
- * (singleton in-memory) và đồng bộ định kỳ với DAO ({@link AuctionDaoImpl})
- * qua {@link #syncFromFile(String)}.
+ * (singleton in-memory) và DAO ({@link AuctionDaoImpl}).
  *
  * <p><b>Tích hợp design patterns:</b>
  * <ul>
@@ -151,14 +150,10 @@ public class AuctionService {
     /**
      * Đặt giá đấu - xử lý concurrent bidding.
      *
-     * <p>Trước khi validate, sync state từ file để tránh JVM hiện tại đặt
-     * giá thấp hơn giá đã được JVM khác cập nhật (multi-JVM consistency).
+     * <p> chưa có multi-JVM consistency.
      */
     public BidTransaction placeBid(String auctionId, String bidderId, String bidderName,
                                    double amount) throws InvalidBidException, AuctionClosedException {
-        // Sync trước khi đọc state để thấy bid mới nhất từ JVM khác.
-        syncFromFile(auctionId);
-
         Auction auction = auctionManager.getAuction(auctionId);
         if (auction == null) {
             throw new InvalidBidException("Không tìm thấy phiên đấu giá: " + auctionId);
@@ -209,12 +204,10 @@ public class AuctionService {
     /**
      * Đăng ký auto-bidding.
      *
-     * <p>Sync từ file trước để biết các autobid của JVM khác đã đăng ký, nhờ
-     * đó {@link Auction#processAutoBids} có thể ping-pong đúng giữa nhiều bidder.
+     <p> chưa có multi-JVM consistency.
      */
     public void registerAutoBid(String auctionId, String bidderId, String bidderName,
                                 double maxBid, double increment) throws InvalidBidException {
-        syncFromFile(auctionId);
 
         Auction auction = auctionManager.getAuction(auctionId);
         if (auction == null) {
@@ -251,30 +244,6 @@ public class AuctionService {
 
     public Optional<Auction> getAuction(String auctionId) {
         return Optional.ofNullable(auctionManager.getAuction(auctionId));
-    }
-
-    /**
-     * Đồng bộ state phiên đấu giá từ file vào {@link AuctionManager}.
-     *
-     * <p>Đây là điểm mấu chốt cho consistency multi-JVM: trước mỗi thao tác
-     * thay đổi state (bid, register auto-bid…), JVM hiện tại reload bản mới
-     * nhất từ file. {@link AuctionDaoImpl#reloadFromFile()} đã merge bid
-     * history + autobid configs từ đĩa vào bản local (không clear-and-replace),
-     * nên các bid mà JVM hiện tại vừa thêm vẫn được giữ.
-     *
-     * <p>No-op khi DAO không phải file-based (vd: in-memory test DAO).
-     */
-    private void syncFromFile(String auctionId) {
-        if (!(auctionDao instanceof AuctionDaoImpl fileDao)) return;
-        try {
-            fileDao.reloadFromFile();
-            // Đẩy bản đã merge vào AuctionManager để service đọc qua manager
-            // cũng thấy state mới nhất.
-            fileDao.findById(auctionId).ifPresent(auctionManager::addAuction);
-        } catch (Exception e) {
-            System.err.println("[AuctionService] Lỗi sync auction " + auctionId
-                    + ": " + e.getMessage());
-        }
     }
 
     public List<Auction> getAllAuctions()                     { return auctionManager.getAllAuctions(); }
