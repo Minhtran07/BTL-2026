@@ -9,8 +9,24 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit Test cho lớp Auction.
- * Kiểm tra logic đặt giá, concurrent bidding, anti-sniping, auto-bid.
+ * ============================================================================
+ * AUCTIONTEST - UNIT TEST CHO LỚP AUCTION (PHIÊN ĐẤU GIÁ)
+ * ============================================================================
+ *
+ * <p>Test các logic phức tạp của Auction:
+ * <ul>
+ *   <li>Logic đặt giá (bid validation, state machine)</li>
+ *   <li>Concurrent bidding (ReentrantLock - 2 thread cùng bid)</li>
+ *   <li>Anti-sniping algorithm (gia hạn khi bid cuối giờ)</li>
+ *   <li>Auto-bid burst (chain reaction giữa các auto-bidder)</li>
+ * </ul>
+ *
+ * <p><b>JUnit 5 lifecycle:</b>
+ * <ul>
+ *   <li>{@code @BeforeEach}: chạy trước MỖI test - setup data sạch</li>
+ *   <li>{@code @Test}: 1 test case</li>
+ *   <li>{@code @AfterEach}: chạy sau MỖI test - cleanup</li>
+ * </ul>
  */
 class AuctionTest {
 
@@ -261,5 +277,95 @@ class AuctionTest {
                     "Mỗi bid phải cao hơn bid trước đó");
         }
     }
-}
 
+    // ==================== Regression: 3 lỗi đỏ khi 2 client cùng auto-bid ====================
+
+    /**
+     * LỖI #1 — Auto-bid phải enforce bước giá tối thiểu 1% giá hiện tại,
+     * không được spam vi tăng giá kiểu +1 khi giá đang là 10.000.
+     */
+    @Test
+    @DisplayName("Auto-bid #1: enforce min increment 1% dù increment đăng ký nhỏ hơn")
+    void testAutoBidEnforcesMinIncrementPercent() {
+        // Bidder-1 đăng ký auto-bid với increment cực nhỏ (1.0) và maxBid rất lớn.
+        AutoBidConfig spamConfig = new AutoBidConfig("bidder-1", "SpamAuto", 100_000.0, 1.0);
+        auction.addAutoBid(spamConfig);
+
+        // Bidder-2 đặt giá thủ công 10.000 → trigger auto-bid của bidder-1.
+        auction.placeBid("bidder-2", "Manual", 10_000.0);
+        List<BidTransaction> autoBids = auction.processAutoBids("bidder-2");
+
+        assertFalse(autoBids.isEmpty(), "Auto-bid phải kích hoạt");
+        BidTransaction first = autoBids.get(0);
+        // Bước giá phải >= 1% × 10.000 = 100, KHÔNG được chỉ +1.
+        double step = first.getBidAmount() - 10_000.0;
+        assertTrue(step >= 100.0,
+                "Bước giá phải >= 1% giá hiện tại, thực tế = " + step);
+    }
+
+    /**
+     * LỖI #1 — Hệ quả: với 2 auto-bidder spam increment nhỏ, vòng lặp phải
+     * kết thúc nhanh (do mỗi bước >= 1%) thay vì hàng triệu vòng +1.
+     */
+    @Test
+    @DisplayName("Auto-bid #1: 2 client increment nhỏ - vòng lặp giới hạn nhờ min 1%")
+    void testTwoAutoBiddersDoNotSpinForever() {
+        AutoBidConfig a = new AutoBidConfig("bidder-1", "AutoA", 50_000.0, 1.0);
+        AutoBidConfig b = new AutoBidConfig("bidder-2", "AutoB", 50_000.0, 1.0);
+        auction.addAutoBid(a);
+        auction.addAutoBid(b);
+
+        // Trigger từ giá 10.000 → mỗi bước ít nhất 1% → tăng theo cấp số ~1.01,
+        // số vòng lặp tối đa ~ log(50.000 / 10.000) / log(1.01) ≈ 162 (KHÔNG phải 40.000).
+        auction.placeBid("bidder-3", "Trigger", 10_000.0);
+
+        long start = System.currentTimeMillis();
+        List<BidTransaction> autoBids = auction.processAutoBids("bidder-3");
+        long elapsed = System.currentTimeMillis() - start;
+
+        assertTrue(elapsed < 1000,
+                "Burst auto-bid phải kết thúc < 1s, thực tế = " + elapsed + "ms");
+        assertTrue(autoBids.size() < 500,
+                "Số auto-bid phải bị giới hạn nhờ min 1%, thực tế = " + autoBids.size());
+        // Một trong hai phải dẫn đầu (không lost-update, không double-leader)
+        assertTrue("bidder-1".equals(auction.getCurrentHighestBidderId())
+                        || "bidder-2".equals(auction.getCurrentHighestBidderId()),
+                "Người dẫn đầu phải là 1 trong 2 auto-bidder");
+    }
+
+    /**
+     * LỖI #5 — Anti-sniping không được cộng dồn extension qua từng auto-bid
+     * trong một burst. End time chỉ nên cách "now" tối đa EXTENSION giây.
+     */
+    @Test
+    @DisplayName("Auto-bid #5: anti-sniping KHÔNG cộng dồn qua các auto-bid trong burst")
+    void testAntiSnipingDoesNotAccumulateAcrossAutoBidBurst() {
+        // Auction sắp hết hạn 10s nữa — vào ngưỡng anti-sniping (30s).
+        Auction nearEndAuction = new Auction(
+                "item-burst", "seller-burst", "Burst Item",
+                1000.0,
+                LocalDateTime.now().minusMinutes(5),
+                LocalDateTime.now().plusSeconds(10));
+        nearEndAuction.start();
+
+        // 2 auto-bidder qua lại nhiều vòng.
+        nearEndAuction.addAutoBid(new AutoBidConfig("a-1", "A", 5_000.0, 50.0));
+        nearEndAuction.addAutoBid(new AutoBidConfig("a-2", "B", 5_000.0, 50.0));
+
+        // Trigger
+        nearEndAuction.placeBid("trigger", "T", 1100.0);
+        List<BidTransaction> autoBids = nearEndAuction.processAutoBids("trigger");
+        assertTrue(autoBids.size() >= 2, "Burst phải có ≥ 2 auto-bid");
+
+        // End time mới phải nằm gần "now + EXTENSION (60s)", KHÔNG phải
+        // cộng dồn 60s × số bid (sẽ ra vài phút).
+        long secondsFromNow = java.time.Duration
+                .between(LocalDateTime.now(), nearEndAuction.getEndTime())
+                .getSeconds();
+
+        assertTrue(secondsFromNow <= 65,
+                "endTime phải <= now + 60s + buffer; thực tế = " + secondsFromNow + "s");
+        assertTrue(secondsFromNow >= 50,
+                "endTime phải được gia hạn ít nhất 50s; thực tế = " + secondsFromNow + "s");
+    }
+}
