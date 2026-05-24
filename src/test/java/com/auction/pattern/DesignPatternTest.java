@@ -1,6 +1,5 @@
 package com.auction.pattern;
 
-
 import com.auction.model.item.Art;
 import com.auction.model.item.Electronics;
 import com.auction.model.item.Item;
@@ -19,6 +18,21 @@ import org.junit.jupiter.api.*;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+
+// ============================================================================
+// DESIGNPATTERNTEST - TEST TÍCH HỢP 4 DESIGN PATTERN CỦA HỆ THỐNG
+// ============================================================================
+//
+// <p>File test này kiểm tra việc CÁC PATTERN HOẠT ĐỘNG CÙNG NHAU:
+// <ul>
+//   <li><b>Singleton</b>: AuctionManager - chỉ 1 instance</li>
+//   <li><b>Factory Method</b>: ItemFactory tạo đúng subclass theo category</li>
+//   <li><b>Observer</b>: AuctionEventDispatcher push event cho subscribers</li>
+//   <li><b>Strategy</b>: BidValidation - chuyển đổi thuật toán validate</li>
+// </ul>
+//
+// <p>Đây là TEST TÍCH HỢP (integration test) - khác unit test ở chỗ
+// dùng nhiều class cùng lúc để xác nhận tương tác giữa chúng.
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -300,4 +314,3 @@ class DesignPatternTest {
                 new ReservePriceBidValidation(-100.0));
     }
 }
-
