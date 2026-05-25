@@ -149,8 +149,6 @@ public class AuctionService {
 
     /**
      * Đặt giá đấu - xử lý concurrent bidding.
-     *
-     * <p> chưa có multi-JVM consistency.
      */
     public BidTransaction placeBid(String auctionId, String bidderId, String bidderName,
                                    double amount) throws InvalidBidException, AuctionClosedException {
@@ -203,8 +201,6 @@ public class AuctionService {
 
     /**
      * Đăng ký auto-bidding.
-     *
-     <p> chưa có multi-JVM consistency.
      */
     public void registerAutoBid(String auctionId, String bidderId, String bidderName,
                                 double maxBid, double increment) throws InvalidBidException {
