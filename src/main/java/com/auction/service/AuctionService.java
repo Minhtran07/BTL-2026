@@ -160,6 +160,8 @@ public class AuctionService {
      */
     public BidTransaction placeBid(String auctionId, String bidderId, String bidderName,
                                    double amount) throws InvalidBidException, AuctionClosedException {
+        BidTransaction transaction;
+        List<BidTransaction> autoBidResults;
         Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
         synchronized (lock) {
             Auction auction = auctionManager.getAuction(auctionId);
@@ -177,36 +179,36 @@ public class AuctionService {
             }
 
             // Đặt giá - thread-safe (Auction nội bộ dùng ReentrantLock)
-            BidTransaction transaction = auction.placeBid(bidderId, bidderName, amount);
+            transaction = auction.placeBid(bidderId, bidderName, amount);
             if (transaction == null) {
                 throw new InvalidBidException("Không thể đặt giá. Vui lòng thử lại.");
             }
 
-            auctionDao.update(auction);
-
-            // Thông báo qua Observer Pattern
-            eventDispatcher.dispatch(new AuctionEvent(
-                    AuctionEvent.EventType.NEW_BID,
-                    auctionId, transaction,
-                    String.format("%s đã đặt giá %.2f", bidderName, amount)));
-
             // Xử lý auto-bidding.
             // Tối ưu: chỉ persist xuống DAO 1 lần sau khi cả burst kết thúc
             // (processAutoBids đã giữ lock và sinh hết transaction trước khi return).
-            List<BidTransaction> autoBidResults = auction.processAutoBids(bidderId);
+            autoBidResults = auction.processAutoBids(bidderId);
             if (!autoBidResults.isEmpty()) {
                 auctionDao.update(auction);
-                for (BidTransaction autoBid : autoBidResults) {
-                    eventDispatcher.dispatch(new AuctionEvent(
-                            AuctionEvent.EventType.AUTO_BID,
-                            auctionId, autoBid,
-                            String.format("[Auto] %s đã tự động đặt giá %.2f",
-                                    autoBid.getBidderName(), autoBid.getBidAmount())));
-                }
             }
-
-            return transaction;
         }
+
+        // Thông báo qua Observer Pattern
+        eventDispatcher.dispatch(new AuctionEvent(
+                AuctionEvent.EventType.NEW_BID,
+                auctionId, transaction,
+                String.format("%s đã đặt giá %.2f", bidderName, amount)));
+
+        if (!autoBidResults.isEmpty()) {
+            for (BidTransaction autoBid : autoBidResults) {
+                eventDispatcher.dispatch(new AuctionEvent(
+                        AuctionEvent.EventType.AUTO_BID,
+                        auctionId, autoBid,
+                        String.format("[Auto] %s đã tự động đặt giá %.2f",
+                                autoBid.getBidderName(), autoBid.getBidAmount())));
+            }
+        }
+        return transaction;
     }
 
     /**

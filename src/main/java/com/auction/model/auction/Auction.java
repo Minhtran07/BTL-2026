@@ -12,7 +12,6 @@ import java.time.LocalDateTime;    // Kiểu lưu thời gian (ngày + giờ) ch
 import java.util.ArrayList;        // List dạng mảng động
 import java.util.Collections;      // Tiện ích cho Collection (unmodifiableList...)
 import java.util.List;             // Interface List
-import java.util.concurrent.locks.ReentrantLock;  // Lock có thể tái nhập (re-enter) - thread-safe
 
 /**
  * ============================================================================
@@ -39,8 +38,6 @@ import java.util.concurrent.locks.ReentrantLock;  // Lock có thể tái nhập 
  *
  * <p><b>CÁC TÍNH NĂNG ĐẶC BIỆT:</b>
  * <ol>
- *   <li><b>Thread-safe:</b> Dùng {@link ReentrantLock} để xử lý nhiều bidder
- *       đặt giá cùng lúc - tránh race condition.</li>
  *   <li><b>Anti-sniping:</b> Tự động gia hạn thời gian nếu có bid trong
  *       30 giây cuối - chống "đánh úp" cuối phiên.</li>
  *   <li><b>Auto-bid (Proxy bidding):</b> Cho phép user đăng ký giá tối đa,
@@ -135,21 +132,6 @@ public class Auction extends Entity {
     /** Đếm số lần đã gia hạn (cho thống kê / debug). */
     private int snipeExtensionCount;
 
-    /**
-     * Lock để đồng bộ hóa truy cập trong môi trường đa luồng.
-     *
-     * <p><b>Tại sao dùng ReentrantLock thay vì synchronized?</b>
-     * <ul>
-     *   <li>Linh hoạt hơn: có thể tryLock(), interrupt được</li>
-     *   <li>Hỗ trợ fair lock (FIFO) - ai chờ trước thì được trước</li>
-     *   <li>Re-entrant: cùng 1 thread có thể lock nhiều lần mà không deadlock</li>
-     * </ul>
-     *
-     * <p><b>Tại sao transient?</b> Lock không cần serialize (gửi qua mạng) - mỗi
-     * JVM phải tự tạo lock mới khi deserialize.
-     */
-    private transient ReentrantLock bidLock;
-
     /** Danh sách config auto-bid (mỗi bidder có thể có 1 config). */
     private final List<AutoBidConfig> autoBids;
 
@@ -163,7 +145,6 @@ public class Auction extends Entity {
         this.autoBids = new ArrayList<>();
         this.status = AuctionStatus.OPEN;
         // true = fair lock: thread chờ trước thì được lock trước
-        this.bidLock = new ReentrantLock(true);
         this.antiSnipingEnabled = true;
         this.totalBids = 0;
         this.snipeExtensionCount = 0;
@@ -193,23 +174,9 @@ public class Auction extends Entity {
         this.status = AuctionStatus.OPEN;
         this.bidHistory = new ArrayList<>();
         this.autoBids = new ArrayList<>();
-        this.bidLock = new ReentrantLock(true);
         this.antiSnipingEnabled = true;
         this.totalBids = 0;
         this.snipeExtensionCount = 0;
-    }
-
-    /**
-     * Trả về lock - lazy init phòng trường hợp deserialize làm mất lock.
-     *
-     * <p>Khi đối tượng Auction được nhận qua socket, transient field bidLock
-     * sẽ là null. Phương thức này kiểm tra và khởi tạo lại nếu cần.
-     */
-    public ReentrantLock getBidLock() {
-        if (bidLock == null) {
-            bidLock = new ReentrantLock(true);
-        }
-        return bidLock;
     }
 
     /**
@@ -232,51 +199,44 @@ public class Auction extends Entity {
      * @return BidTransaction mới nếu thành công, null nếu thất bại
      */
     public BidTransaction placeBid(String bidderId, String bidderName, double amount) {
-        // BẮT ĐẦU CRITICAL SECTION - chỉ 1 thread vào được tại 1 thời điểm
-        getBidLock().lock();
-        try {
-            // Điều kiện 1: phiên phải đang chạy
-            if (status != AuctionStatus.RUNNING) {
-                return null;
-            }
-
-            // Điều kiện 2: chưa hết thời gian
-            if (LocalDateTime.now().isAfter(endTime)) {
-                return null;
-            }
-
-            // Điều kiện 3: giá phải lớn hơn giá cao nhất hiện tại
-            if (amount <= currentHighestBid) {
-                return null;
-            }
-
-            // Điều kiện 4: không cho seller tự đấu giá (chống gian lận)
-            if (bidderId.equals(sellerId)) {
-                return null;
-            }
-
-            // ===== TẠO GIAO DỊCH MỚI =====
-            BidTransaction transaction = new BidTransaction(
-                    getId(), bidderId, bidderName, amount, currentHighestBid);
-
-            // ===== CẬP NHẬT TRẠNG THÁI AUCTION =====
-            this.currentHighestBid = amount;
-            this.currentHighestBidderId = bidderId;
-            this.currentHighestBidderName = bidderName;
-            this.totalBids++;
-            this.bidHistory.add(transaction);
-
-            // Anti-sniping: gia hạn nếu bid trong 30s cuối
-            if (antiSnipingEnabled) {
-                checkAndExtendForAntiSniping();
-            }
-
-            markUpdated(); // ghi nhận đã sửa đổi
-            return transaction;
-        } finally {
-            // LUÔN unlock trong finally - tránh deadlock khi có exception
-            getBidLock().unlock();
+        // Điều kiện 1: phiên phải đang chạy
+        if (status != AuctionStatus.RUNNING) {
+            return null;
         }
+
+        // Điều kiện 2: chưa hết thời gian
+        if (LocalDateTime.now().isAfter(endTime)) {
+            return null;
+        }
+
+        // Điều kiện 3: giá phải lớn hơn giá cao nhất hiện tại
+        if (amount <= currentHighestBid) {
+            return null;
+        }
+
+        // Điều kiện 4: không cho seller tự đấu giá (chống gian lận)
+        if (bidderId.equals(sellerId)) {
+            return null;
+        }
+
+        // ===== TẠO GIAO DỊCH MỚI =====
+        BidTransaction transaction = new BidTransaction(
+                getId(), bidderId, bidderName, amount, currentHighestBid);
+
+        // ===== CẬP NHẬT TRẠNG THÁI AUCTION =====
+        this.currentHighestBid = amount;
+        this.currentHighestBidderId = bidderId;
+        this.currentHighestBidderName = bidderName;
+        this.totalBids++;
+        this.bidHistory.add(transaction);
+
+        // Anti-sniping: gia hạn nếu bid trong 30s cuối
+        if (antiSnipingEnabled) {
+            checkAndExtendForAntiSniping();
+        }
+
+        markUpdated(); // ghi nhận đã sửa đổi
+        return transaction;
     }
 
     /**
@@ -326,14 +286,9 @@ public class Auction extends Entity {
      * Có lock vì có thể có placeBid() đang chạy đồng thời.
      */
     public void finish() {
-        getBidLock().lock();
-        try {
-            if (status == AuctionStatus.RUNNING) {
-                this.status = AuctionStatus.FINISHED;
-                markUpdated();
-            }
-        } finally {
-            getBidLock().unlock();
+        if (status == AuctionStatus.RUNNING) {
+            this.status = AuctionStatus.FINISHED;
+            markUpdated();
         }
     }
 
@@ -356,13 +311,8 @@ public class Auction extends Entity {
      * mới chạy (không bị nửa nạc nửa mỡ).
      */
     public void cancel() {
-        getBidLock().lock();
-        try {
-            this.status = AuctionStatus.CANCELED;
-            markUpdated();
-        } finally {
-            getBidLock().unlock();
-        }
+        this.status = AuctionStatus.CANCELED;
+        markUpdated();
     }
 
     /** Kiểm tra phiên đã quá thời hạn chưa (theo wall-clock). */
@@ -380,14 +330,9 @@ public class Auction extends Entity {
      * Nếu bidder đã đăng ký auto-bid trước đó → ghi đè (chỉ 1 config / bidder).
      */
     public void addAutoBid(AutoBidConfig config) {
-        getBidLock().lock();
-        try {
-            // Xóa config cũ của cùng bidder (nếu có)
-            autoBids.removeIf(ab -> ab.getBidderId().equals(config.getBidderId()));
-            autoBids.add(config);
-        } finally {
-            getBidLock().unlock();
-        }
+        // Xóa config cũ của cùng bidder (nếu có)
+        autoBids.removeIf(ab -> ab.getBidderId().equals(config.getBidderId()));
+        autoBids.add(config);
     }
 
     /**
@@ -411,79 +356,74 @@ public class Auction extends Entity {
      */
     public List<BidTransaction> processAutoBids(String excludeBidderId) {
         List<BidTransaction> autoBidTransactions = new ArrayList<>();
-        getBidLock().lock();
-        try {
-            // Lấy timestamp của bid cuối cùng → đảm bảo các bid auto-gen
-            // có thời gian STRICTLY tăng dần (mỗi cái sau lớn hơn cái trước)
-            LocalDateTime lastBidTime = bidHistory.isEmpty()
-                    ? LocalDateTime.MIN
-                    : bidHistory.get(bidHistory.size() - 1).getBidTime();
+        // Lấy timestamp của bid cuối cùng → đảm bảo các bid auto-gen
+        // có thời gian STRICTLY tăng dần (mỗi cái sau lớn hơn cái trước)
+        LocalDateTime lastBidTime = bidHistory.isEmpty()
+                ? LocalDateTime.MIN
+                : bidHistory.get(bidHistory.size() - 1).getBidTime();
 
-            // Vòng lặp ngoài: lặp đến khi không còn auto-bid nào kích hoạt
-            boolean anyBidPlaced = true;
-            while (anyBidPlaced) {
-                anyBidPlaced = false;
+        // Vòng lặp ngoài: lặp đến khi không còn auto-bid nào kích hoạt
+        boolean anyBidPlaced = true;
+        while (anyBidPlaced) {
+            anyBidPlaced = false;
 
-                // Sắp xếp auto-bid theo thời điểm đăng ký (FIFO tiebreaker)
-                // Ai đăng ký trước có lợi thế "lên giá" trước
-                List<AutoBidConfig> sorted = new ArrayList<>(autoBids);
-                sorted.sort((a, b) -> a.getRegisteredAt().compareTo(b.getRegisteredAt()));
+            // Sắp xếp auto-bid theo thời điểm đăng ký (FIFO tiebreaker)
+            // Ai đăng ký trước có lợi thế "lên giá" trước
+            List<AutoBidConfig> sorted = new ArrayList<>(autoBids);
+            sorted.sort((a, b) -> a.getRegisteredAt().compareTo(b.getRegisteredAt()));
 
-                // Duyệt qua từng auto-bid
-                for (AutoBidConfig autoBid : sorted) {
-                    // Bỏ qua người vừa trigger (tránh phản lại chính mình)
-                    if (autoBid.getBidderId().equals(excludeBidderId)) continue;
-                    // Bỏ qua người đang dẫn đầu (không cần bid thêm)
-                    if (autoBid.getBidderId().equals(currentHighestBidderId)) continue;
+            // Duyệt qua từng auto-bid
+            for (AutoBidConfig autoBid : sorted) {
+                // Bỏ qua người vừa trigger (tránh phản lại chính mình)
+                if (autoBid.getBidderId().equals(excludeBidderId)) continue;
+                // Bỏ qua người đang dẫn đầu (không cần bid thêm)
+                if (autoBid.getBidderId().equals(currentHighestBidderId)) continue;
 
-                    // Tính bước giá: max(increment user chọn, 1% giá hiện tại)
-                    double minStep = currentHighestBid * MIN_INCREMENT_PERCENT;
-                    double effectiveIncrement = Math.max(autoBid.getIncrement(), minStep);
-                    double newBid = currentHighestBid + effectiveIncrement;
+                // Tính bước giá: max(increment user chọn, 1% giá hiện tại)
+                double minStep = currentHighestBid * MIN_INCREMENT_PERCENT;
+                double effectiveIncrement = Math.max(autoBid.getIncrement(), minStep);
+                double newBid = currentHighestBid + effectiveIncrement;
 
-                    // Kiểm tra: bid mới vượt mức trần của user → skip
-                    if (newBid > autoBid.getMaxBid()) continue;
+                // Kiểm tra: bid mới vượt mức trần của user → skip
+                if (newBid > autoBid.getMaxBid()) continue;
 
-                    // ===== ĐẢM BẢO TIMESTAMP STRICTLY TĂNG DẦN =====
-                    // Nếu clock resolution kém → 2 bid có thể cùng nano →
-                    // cộng thêm 1 nano để bid mới > bid cũ về thời gian
-                    LocalDateTime bidTime = LocalDateTime.now();
-                    if (!bidTime.isAfter(lastBidTime)) {
-                        bidTime = lastBidTime.plusNanos(1);
-                    }
-                    lastBidTime = bidTime;
-
-                    // Tạo transaction cho auto-bid
-                    BidTransaction tx = new BidTransaction(
-                            getId(), autoBid.getBidderId(), autoBid.getBidderName(),
-                            newBid, currentHighestBid, bidTime);
-
-                    // Cập nhật state
-                    this.currentHighestBid = newBid;
-                    this.currentHighestBidderId = autoBid.getBidderId();
-                    this.currentHighestBidderName = autoBid.getBidderName();
-                    this.totalBids++;
-                    this.bidHistory.add(tx);
-                    autoBidTransactions.add(tx);
-
-                    // Mỗi auto-bid cũng kích hoạt anti-sniping
-                    if (antiSnipingEnabled) {
-                        checkAndExtendForAntiSniping();
-                    }
-
-                    // Đã đặt 1 bid → restart vòng ngoài để các auto-bidder
-                    // khác có cơ hội phản ứng với leader mới
-                    anyBidPlaced = true;
-                    break;
+                // ===== ĐẢM BẢO TIMESTAMP STRICTLY TĂNG DẦN =====
+                // Nếu clock resolution kém → 2 bid có thể cùng nano →
+                // cộng thêm 1 nano để bid mới > bid cũ về thời gian
+                LocalDateTime bidTime = LocalDateTime.now();
+                if (!bidTime.isAfter(lastBidTime)) {
+                    bidTime = lastBidTime.plusNanos(1);
                 }
-            }
+                lastBidTime = bidTime;
 
-            // Chỉ markUpdated nếu thực sự có thay đổi
-            if (!autoBidTransactions.isEmpty()) {
-                markUpdated();
+                // Tạo transaction cho auto-bid
+                BidTransaction tx = new BidTransaction(
+                        getId(), autoBid.getBidderId(), autoBid.getBidderName(),
+                        newBid, currentHighestBid, bidTime);
+
+                // Cập nhật state
+                this.currentHighestBid = newBid;
+                this.currentHighestBidderId = autoBid.getBidderId();
+                this.currentHighestBidderName = autoBid.getBidderName();
+                this.totalBids++;
+                this.bidHistory.add(tx);
+                autoBidTransactions.add(tx);
+
+                // Mỗi auto-bid cũng kích hoạt anti-sniping
+                if (antiSnipingEnabled) {
+                    checkAndExtendForAntiSniping();
+                }
+
+                // Đã đặt 1 bid → restart vòng ngoài để các auto-bidder
+                // khác có cơ hội phản ứng với leader mới
+                anyBidPlaced = true;
+                break;
             }
-        } finally {
-            getBidLock().unlock();
+        }
+
+        // Chỉ markUpdated nếu thực sự có thay đổi
+        if (!autoBidTransactions.isEmpty()) {
+            markUpdated();
         }
         return autoBidTransactions;
     }
@@ -544,25 +484,15 @@ public class Auction extends Entity {
      * đồng bộ lại currentHighestBid và leader.
      */
     public void replaceBidHistory(List<BidTransaction> merged) {
-        getBidLock().lock();
-        try {
-            this.bidHistory.clear();
-            this.bidHistory.addAll(merged);
-            this.totalBids = this.bidHistory.size();
-        } finally {
-            getBidLock().unlock();
-        }
+        this.bidHistory.clear();
+        this.bidHistory.addAll(merged);
+        this.totalBids = this.bidHistory.size();
     }
 
     /** Thay thế auto-bid configs - dùng khi merge từ nhiều JVM. */
     public void replaceAutoBids(List<AutoBidConfig> merged) {
-        getBidLock().lock();
-        try {
-            this.autoBids.clear();
-            this.autoBids.addAll(merged);
-        } finally {
-            getBidLock().unlock();
-        }
+        this.autoBids.clear();
+        this.autoBids.addAll(merged);
     }
 
     /**
@@ -572,29 +502,24 @@ public class Auction extends Entity {
      * Duyệt toàn bộ bidHistory tìm bid có amount lớn nhất.
      */
     public void recomputeLeaderFromHistory() {
-        getBidLock().lock();
-        try {
-            // Trường hợp không có bid nào → reset về starting price
-            if (bidHistory.isEmpty()) {
-                this.currentHighestBid = startingPrice;
-                this.currentHighestBidderId = null;
-                this.currentHighestBidderName = null;
-                return;
-            }
-            // Tìm bid có giá cao nhất
-            BidTransaction top = bidHistory.get(0);
-            for (BidTransaction tx : bidHistory) {
-                if (tx.getBidAmount() > top.getBidAmount()) {
-                    top = tx;
-                }
-            }
-            // Cập nhật leader theo bid cao nhất
-            this.currentHighestBid = top.getBidAmount();
-            this.currentHighestBidderId = top.getBidderId();
-            this.currentHighestBidderName = top.getBidderName();
-        } finally {
-            getBidLock().unlock();
+        // Trường hợp không có bid nào → reset về starting price
+        if (bidHistory.isEmpty()) {
+            this.currentHighestBid = startingPrice;
+            this.currentHighestBidderId = null;
+            this.currentHighestBidderName = null;
+            return;
         }
+        // Tìm bid có giá cao nhất
+        BidTransaction top = bidHistory.get(0);
+        for (BidTransaction tx : bidHistory) {
+            if (tx.getBidAmount() > top.getBidAmount()) {
+                top = tx;
+            }
+        }
+        // Cập nhật leader theo bid cao nhất
+        this.currentHighestBid = top.getBidAmount();
+        this.currentHighestBidderId = top.getBidderId();
+        this.currentHighestBidderName = top.getBidderName();
     }
 
     /**
