@@ -162,11 +162,12 @@ public class AuctionService {
                                    double amount) throws InvalidBidException, AuctionClosedException {
         Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
 
+        Auction auction;
         BidTransaction transaction;
         List<BidTransaction> autoBidResults;
 
         synchronized (lock) {
-            Auction auction = auctionManager.getAuction(auctionId);
+            auction = auctionManager.getAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá: " + auctionId);
             }
@@ -220,10 +221,11 @@ public class AuctionService {
                                 double maxBid, double increment) throws InvalidBidException {
         Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
 
+        Auction auction;
         List<BidTransaction> autoBidResults = List.of();
 
         synchronized (lock) {
-            Auction auction = auctionManager.getAuction(auctionId);
+            auction = auctionManager.getAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá");
             }
@@ -274,8 +276,11 @@ public class AuctionService {
      */
     public void endAuction(String auctionId) {
         Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+
+        Auction auction;
+
         synchronized (lock) {
-            Auction auction = auctionManager.getAuction(auctionId);
+            auction = auctionManager.getAuction(auctionId);
             if (auction == null) return;
 
             auction.finish();
@@ -358,6 +363,7 @@ public class AuctionService {
                 AuctionEvent.EventType.AUCTION_CANCELED,
                 auctionId,
                 "Phiên đấu giá đã bị hủy"));
+        }
     }
 
     /**
