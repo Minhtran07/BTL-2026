@@ -7,7 +7,7 @@ import com.auction.model.item.Art;
 import com.auction.model.item.Electronics;
 import com.auction.model.item.Item;
 import com.auction.model.item.Vehicle;
-import com.auction.network.AuctionClient;
+import com.auction.network.client.AuctionClientService;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
@@ -17,22 +17,38 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Controller chỉnh sửa / xoá sản phẩm — qua server.
+ * ============================================================================
+ * EDITITEMCONTROLLER - CONTROLLER CHỈNH SỬA / XÓA ITEM
+ * ============================================================================
+ *
+ * <p>Cho phép Seller sửa thông tin sản phẩm hoặc xóa hẳn. Tính năng:
+ * <ul>
+ *   <li>Load thông tin Item hiện tại lên form (populateFields)</li>
+ *   <li>Field động theo loại Item (Electronics/Art/Vehicle)</li>
+ *   <li>Lưu thay đổi qua server</li>
+ *   <li>Xóa Item với confirm dialog + kiểm tra không có auction đang chạy</li>
+ * </ul>
+ *
+ * <p><b>QUAN TRỌNG:</b> Không xóa Item nếu có Auction đang chạy/chưa bắt đầu
+ * - tránh phá vỡ tham chiếu trong DB.
  */
 public class EditItemController {
 
+    // ===== UI Elements =====
     @FXML private TextField itemNameField;
-    @FXML private TextField categoryField;
+    @FXML private TextField categoryField; // hiển thị category, không cho sửa
     @FXML private TextArea  descriptionArea;
     @FXML private TextField startPriceField;
     @FXML private VBox      extraFieldsContainer;
     @FXML private Label     errorLabel;
     @FXML private Label     successLabel;
 
-    private final AuctionClient client = AuctionClient.getInstance();
+    private final AuctionClientService auctionClientService = AuctionClientService.getInstance();
 
+    /** Item đang được edit - DashboardController set vào trước khi navigate. */
     private Item currentItem;
 
+    // ===== Các field động (tạo runtime tùy loại Item) =====
     private TextField brandField;
     private TextField modelField;
     private TextField conditionField;
@@ -43,11 +59,18 @@ public class EditItemController {
     private TextField vehicleModelField;
     private TextField mileageField;
 
+    /**
+     * Phương thức public để DashboardController truyền Item vào trước khi
+     * hiển thị màn hình edit. Gọi populateFields() để hiển thị data lên UI.
+     */
     public void setItem(Item item) {
         this.currentItem = item;
         populateFields();
     }
 
+    /**
+     * Xử lý nút "Lưu" - validate + cập nhật Item.
+     */
     @FXML
     private void handleSave() {
         hideMessages();
@@ -66,6 +89,7 @@ public class EditItemController {
             return;
         }
 
+        // Parse giá
         double price;
         try {
             price = Double.parseDouble(priceText);
@@ -78,10 +102,12 @@ public class EditItemController {
             return;
         }
 
+        // ===== Cập nhật field chung =====
         currentItem.setName(name);
         currentItem.setDescription(desc);
         currentItem.setStartingPrice(price);
 
+        // ===== Cập nhật field riêng theo loại Item (pattern matching) =====
         if (currentItem instanceof Electronics elec) {
             if (brandField   != null) elec.setBrand(brandField.getText().trim());
             if (modelField   != null) elec.setModel(modelField.getText().trim());
@@ -90,6 +116,7 @@ public class EditItemController {
             if (artistField != null) art.setArtist(artistField.getText().trim());
             if (mediumField != null) art.setMedium(mediumField.getText().trim());
             if (yearField   != null) {
+                // Try-catch riêng cho parseInt - tránh fail tổng thể nếu year sai
                 try { art.setYear(Integer.parseInt(yearField.getText().trim())); }
                 catch (NumberFormatException ignored) {}
             }
@@ -106,21 +133,35 @@ public class EditItemController {
             }
         }
 
+        // Gửi update lên server
         try {
-            client.updateItem(currentItem);
+            auctionClientService.updateItem(currentItem);
             showSuccess("Đã lưu thay đổi thành công!");
         } catch (IOException e) {
             showError("Lỗi khi lưu: " + e.getMessage());
         }
     }
 
+    /**
+     * Xử lý nút "Xóa" - kiểm tra ràng buộc + confirm + xóa.
+     *
+     * <p><b>Quy trình:</b>
+     * <ol>
+     *   <li>Kiểm tra có Auction nào đang RUNNING hoặc OPEN với item này không
+     *       → có thì từ chối xóa</li>
+     *   <li>Hiển thị dialog xác nhận</li>
+     *   <li>Nếu YES → gọi server xóa</li>
+     * </ol>
+     */
     @FXML
     private void handleDelete() {
         if (currentItem == null) return;
 
-        // Server cũng tự kiểm, nhưng kiểm trên client để show message thân thiện
+        // ===== Kiểm tra ràng buộc =====
+        // Server cũng kiểm, nhưng kiểm trên client để show message thân thiện sớm hơn
         try {
-            List<Auction> allAuctions = client.getAllAuctions();
+            List<Auction> allAuctions = auctionClientService.getAllAuctions();
+            // Tìm xem có auction nào đang dùng item này KHÔNG ở trạng thái kết thúc
             Optional<Auction> activeAuction = allAuctions.stream()
                     .filter(a -> a.getItemId().equals(currentItem.getId())
                             && (a.getStatus() == AuctionStatus.RUNNING
@@ -138,17 +179,21 @@ public class EditItemController {
             return;
         }
 
+        // ===== Dialog xác nhận =====
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Xác nhận xóa");
         confirm.setHeaderText("Xóa sản phẩm: " + currentItem.getName());
         confirm.setContentText("Bạn có chắc chắn muốn xóa sản phẩm này?\nHành động này không thể hoàn tác.");
         confirm.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
 
+        // showAndWait() đợi user phản hồi, trả về Optional<ButtonType>
         Optional<ButtonType> result = confirm.showAndWait();
+        // User đóng dialog (Optional empty) hoặc chọn NO → hủy
         if (result.isEmpty() || result.get() != ButtonType.YES) return;
 
+        // ===== Xóa =====
         try {
-            client.deleteItem(currentItem.getId());
+            auctionClientService.deleteItem(currentItem.getId());
             MainApp.navigateTo("/com/auction/view/dashboard.fxml", "Trang chủ");
         } catch (IOException e) {
             showError("Lỗi khi xóa: " + e.getMessage());
@@ -160,18 +205,27 @@ public class EditItemController {
         MainApp.navigateTo("/com/auction/view/dashboard.fxml", "Trang chủ");
     }
 
+    /**
+     * Đổ data của currentItem lên form.
+     * Tùy loại Item → tạo field động phù hợp.
+     */
     private void populateFields() {
         if (currentItem == null) return;
 
+        // Field chung
         itemNameField.setText(currentItem.getName());
         descriptionArea.setText(currentItem.getDescription() != null ? currentItem.getDescription() : "");
+        // Cast double → long để bỏ phần thập phân khi hiển thị (vd: 1000000 thay vì 1000000.0)
         startPriceField.setText(String.valueOf((long) currentItem.getStartingPrice()));
 
+        // Clear field cũ trước khi tạo mới
         extraFieldsContainer.getChildren().clear();
+        // Reset tất cả tham chiếu - tránh dùng nhầm field cũ
         brandField = modelField = conditionField = null;
         artistField = yearField = mediumField = null;
         makeField = vehicleModelField = mileageField = null;
 
+        // Tạo field động + đổ data theo loại Item
         if (currentItem instanceof Electronics elec) {
             categoryField.setText("Điện tử");
             brandField      = addExtraField("Hãng sản xuất", elec.getBrand());
@@ -192,10 +246,12 @@ public class EditItemController {
             mileageField      = addExtraField("Số km đã đi",    String.valueOf(v.getMileage()));
 
         } else {
+            // Loại không xác định → chỉ hiển thị category, không có field riêng
             categoryField.setText(currentItem.getCategory().name());
         }
     }
 
+    /** Thêm 1 label + textfield đã điền sẵn value vào container động. */
     private TextField addExtraField(String label, String value) {
         VBox box = new VBox(4);
         Label lbl   = new Label(label);
