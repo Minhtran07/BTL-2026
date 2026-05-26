@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service xử lý nghiệp vụ đấu giá — lớp orchestration trung tâm cho toàn bộ
@@ -64,6 +65,13 @@ public class AuctionService {
     private final AuctionManager      auctionManager;
     private final AuctionEventDispatcher eventDispatcher;
     private final BidValidationStrategy  bidValidator;
+
+    /**
+     * BẢN ĐỒ Ổ KHÓA (LOCK MAP): Quản lý các ổ khóa độc lập theo từng Auction ID.
+     * Đảm bảo tính duy nhất của Object khóa trên RAM cho mỗi phòng đấu giá.
+     * Giúp hệ thống không bị nghẽn cổ chai toàn cục (Global Bottleneck).
+     */
+    private final ConcurrentHashMap<String, Object> auctionLocks = new ConcurrentHashMap<>();
 
     /** Constructor mặc định (production). */
     public AuctionService() {
@@ -149,33 +157,43 @@ public class AuctionService {
 
     /**
      * Đặt giá đấu - xử lý concurrent bidding.
-     *
-     * <p> chưa có multi-JVM consistency.
      */
     public BidTransaction placeBid(String auctionId, String bidderId, String bidderName,
                                    double amount) throws InvalidBidException, AuctionClosedException {
-        Auction auction = auctionManager.getAuction(auctionId);
-        if (auction == null) {
-            throw new InvalidBidException("Không tìm thấy phiên đấu giá: " + auctionId);
-        }
+        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
 
-        // Validate bằng Strategy Pattern
-        try {
-            bidValidator.validate(auction, bidderId, amount);
-        } catch (IllegalArgumentException e) {
-            if (auction.getStatus() != AuctionStatus.RUNNING || auction.isExpired()) {
-                throw new AuctionClosedException(e.getMessage());
+        BidTransaction transaction;
+        List<BidTransaction> autoBidResults;
+
+        synchronized (lock) {
+            Auction auction = auctionManager.getAuction(auctionId);
+            if (auction == null) {
+                throw new InvalidBidException("Không tìm thấy phiên đấu giá: " + auctionId);
             }
-            throw new InvalidBidException(e.getMessage());
-        }
+            // Validate bằng Strategy Pattern
+            try {
+                bidValidator.validate(auction, bidderId, amount);
+            } catch (IllegalArgumentException e) {
+                if (auction.getStatus() != AuctionStatus.RUNNING || auction.isExpired()) {
+                    throw new AuctionClosedException(e.getMessage());
+                }
+                throw new InvalidBidException(e.getMessage());
+            }
 
-        // Đặt giá - thread-safe (Auction nội bộ dùng ReentrantLock)
-        BidTransaction transaction = auction.placeBid(bidderId, bidderName, amount);
-        if (transaction == null) {
-            throw new InvalidBidException("Không thể đặt giá. Vui lòng thử lại.");
-        }
+            // Đặt giá - thread-safe (Auction nội bộ dùng ReentrantLock)
+            transaction = auction.placeBid(bidderId, bidderName, amount);
+            if (transaction == null) {
+                throw new InvalidBidException("Không thể đặt giá. Vui lòng thử lại.");
+            }
 
-        auctionDao.update(auction);
+            // Xử lý auto-bidding.
+            // Tối ưu: chỉ persist xuống DAO 1 lần sau khi cả burst kết thúc
+            // (processAutoBids đã giữ lock và sinh hết transaction trước khi return).
+            autoBidResults = auction.processAutoBids(bidderId);
+            if (!autoBidResults.isEmpty()) {
+                auctionDao.update(auction);
+            }
+        }
 
         // Thông báo qua Observer Pattern
         eventDispatcher.dispatch(new AuctionEvent(
@@ -183,12 +201,7 @@ public class AuctionService {
                 auctionId, transaction,
                 String.format("%s đã đặt giá %.2f", bidderName, amount)));
 
-        // Xử lý auto-bidding.
-        // Tối ưu: chỉ persist xuống DAO 1 lần sau khi cả burst kết thúc
-        // (processAutoBids đã giữ lock và sinh hết transaction trước khi return).
-        List<BidTransaction> autoBidResults = auction.processAutoBids(bidderId);
         if (!autoBidResults.isEmpty()) {
-            auctionDao.update(auction);
             for (BidTransaction autoBid : autoBidResults) {
                 eventDispatcher.dispatch(new AuctionEvent(
                         AuctionEvent.EventType.AUTO_BID,
@@ -197,47 +210,51 @@ public class AuctionService {
                                 autoBid.getBidderName(), autoBid.getBidAmount())));
             }
         }
-
         return transaction;
     }
 
     /**
      * Đăng ký auto-bidding.
-     *
-     <p> chưa có multi-JVM consistency.
      */
     public void registerAutoBid(String auctionId, String bidderId, String bidderName,
                                 double maxBid, double increment) throws InvalidBidException {
+        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
 
-        Auction auction = auctionManager.getAuction(auctionId);
-        if (auction == null) {
-            throw new InvalidBidException("Không tìm thấy phiên đấu giá");
-        }
-        if (maxBid <= auction.getCurrentHighestBid()) {
-            throw new InvalidBidException("Giá tối đa phải cao hơn giá hiện tại");
-        }
-        if (increment <= 0) {
-            throw new InvalidBidException("Bước giá phải lớn hơn 0");
+        List<BidTransaction> autoBidResults = List.of();
+
+        synchronized (lock) {
+            Auction auction = auctionManager.getAuction(auctionId);
+            if (auction == null) {
+                throw new InvalidBidException("Không tìm thấy phiên đấu giá");
+            }
+            if (maxBid <= auction.getCurrentHighestBid()) {
+                throw new InvalidBidException("Giá tối đa phải cao hơn giá hiện tại");
+            }
+            if (increment <= 0) {
+                throw new InvalidBidException("Bước giá phải lớn hơn 0");
+            }
+
+            // Thay đổi cấu hình AutoBid trên RAM
+            AutoBidConfig config = new AutoBidConfig(bidderId, bidderName, maxBid, increment);
+            auction.addAutoBid(config);
+
+            // Ngay lập tức xử lý auto-bid nếu chưa dẫn đầu.
+            // excludeBidderId = "" → không loại trừ ai (người mới đăng ký cũng được phép bid ngay).
+            if (!bidderId.equals(auction.getCurrentHighestBidderId())) {
+                autoBidResults = auction.processAutoBids("");
+            }
+
+            // Tối ưu: chỉ persist 1 lần sau cả burst.
+            auctionDao.update(auction);
         }
 
-        AutoBidConfig config = new AutoBidConfig(bidderId, bidderName, maxBid, increment);
-        auction.addAutoBid(config);
-        auctionDao.update(auction);
-
-        // Ngay lập tức xử lý auto-bid nếu chưa dẫn đầu.
-        // excludeBidderId = "" → không loại trừ ai (người mới đăng ký cũng được phép bid ngay).
-        // Tối ưu: chỉ persist 1 lần sau cả burst.
-        if (!bidderId.equals(auction.getCurrentHighestBidderId())) {
-            List<BidTransaction> results = auction.processAutoBids("");
-            if (!results.isEmpty()) {
-                auctionDao.update(auction);
-                for (BidTransaction tx : results) {
-                    eventDispatcher.dispatch(new AuctionEvent(
-                            AuctionEvent.EventType.AUTO_BID,
-                            auctionId, tx,
-                            String.format("[Auto] %s đã tự động đặt giá %.2f",
-                                    tx.getBidderName(), tx.getBidAmount())));
-                }
+        if (!autoBidResults.isEmpty()) {
+            for (BidTransaction tx : autoBidResults) {
+                eventDispatcher.dispatch(new AuctionEvent(
+                    AuctionEvent.EventType.AUTO_BID,
+                    auctionId, tx,
+                    String.format("[Auto] %s đã tự động đặt giá %.2f",
+                        tx.getBidderName(), tx.getBidAmount())));
             }
         }
     }
@@ -256,21 +273,24 @@ public class AuctionService {
      * <p>Thứ tự: finish() → settleAuction() → dispatch AUCTION_ENDED event.
      */
     public void endAuction(String auctionId) {
-        Auction auction = auctionManager.getAuction(auctionId);
-        if (auction == null) return;
+        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        synchronized (lock) {
+            Auction auction = auctionManager.getAuction(auctionId);
+            if (auction == null) return;
 
-        auction.finish();
-        auctionDao.update(auction);
+            auction.finish();
+            auctionDao.update(auction);
+        }
 
         // Thực hiện chuyển tiền (trừ người thắng, cộng người bán)
         settleAuction(auction);
 
         eventDispatcher.dispatch(new AuctionEvent(
-                AuctionEvent.EventType.AUCTION_ENDED,
-                auctionId,
-                "Phiên đấu giá đã kết thúc. Người thắng: "
-                        + (auction.getCurrentHighestBidderName() != null
-                        ? auction.getCurrentHighestBidderName() : "Không có")));
+            AuctionEvent.EventType.AUCTION_ENDED,
+            auctionId,
+            "Phiên đấu giá đã kết thúc. Người thắng: "
+                + (auction.getCurrentHighestBidderName() != null
+                ? auction.getCurrentHighestBidderName() : "Không có")));
     }
 
     /**
@@ -317,15 +337,27 @@ public class AuctionService {
      * Hủy phiên đấu giá.
      */
     public void cancelAuction(String auctionId) {
-        Auction auction = auctionManager.getAuction(auctionId);
-        if (auction != null) {
-            auction.cancel();
-            auctionDao.update(auction);
-            eventDispatcher.dispatch(new AuctionEvent(
+        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+
+        boolean isCanceledSuccessfully = false;
+
+        synchronized (lock) {
+            Auction auction = auctionManager.getAuction(auctionId);
+            if (auction != null) {
+                auction.cancel();
+                auctionDao.update(auction);
+                isCanceledSuccessfully = true;
+                eventDispatcher.dispatch(new AuctionEvent(
                     AuctionEvent.EventType.AUCTION_CANCELED,
                     auctionId,
                     "Phiên đấu giá đã bị hủy"));
+            }
         }
+        if (isCanceledSuccessfully) {
+            eventDispatcher.dispatch(new AuctionEvent(
+                AuctionEvent.EventType.AUCTION_CANCELED,
+                auctionId,
+                "Phiên đấu giá đã bị hủy"));
     }
 
     /**
