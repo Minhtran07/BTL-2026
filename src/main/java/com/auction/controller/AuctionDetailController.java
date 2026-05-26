@@ -6,7 +6,7 @@ import com.auction.model.auction.Auction;
 import com.auction.model.auction.AuctionStatus;
 import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
-import com.auction.network.AuctionClient;
+import com.auction.network.client.AuctionClientService;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -15,7 +15,10 @@ import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextField;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -26,51 +29,87 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 /**
- * Controller cho màn hình chi tiết phiên đấu giá — qua server.
+ * ============================================================================
+ * AUCTIONDETAILCONTROLLER - MÀN HÌNH CHI TIẾT PHIÊN ĐẤU GIÁ
+ * ============================================================================
  *
- * <p>Cập nhật realtime:
+ * <p>Đây là controller PHỨC TẠP NHẤT trong app - hiển thị toàn bộ thông tin
+ * của 1 phiên đấu giá và cho phép user tương tác (đặt bid, đăng ký auto-bid).
+ *
+ * <p><b>NỘI DUNG MÀN HÌNH:</b>
  * <ul>
- *   <li>{@link AuctionClient.PushListener} nhận push BID_UPDATE /
- *       AUCTION_EVENT từ server và refresh UI.</li>
- *   <li>Sync timer 2s vẫn chạy để cập nhật countdown timer + bù trường hợp
- *       miss event.</li>
+ *   <li>Thông tin sản phẩm: tên, mô tả, giá khởi điểm, seller</li>
+ *   <li>Thông tin phiên: trạng thái, countdown timer, giá hiện tại,
+ *       người dẫn đầu, số lượt bid</li>
+ *   <li>Form đặt giá thủ công + form đăng ký auto-bid</li>
+ *   <li>Biểu đồ đường (LineChart) hiển thị diễn biến giá theo thời gian</li>
+ *   <li>Lịch sử bid (ListView)</li>
+ * </ul>
+ *
+ * <p><b>REALTIME UPDATE - 2 CƠ CHẾ KẾT HỢP:</b>
+ * <ol>
+ *   <li><b>Push từ server:</b> Khi có ai đó bid, server đẩy event xuống tất cả
+ *       client đang xem phiên này → controller tự refresh ngay</li>
+ *   <li><b>Sync timer 2s:</b> Backup mechanism - cứ 2 giây lại lấy data
+ *       mới, đồng thời update countdown timer</li>
+ * </ol>
+ *
+ * <p><b>TẠI SAO CẦN CẢ 2?</b>
+ * <ul>
+ *   <li>Push nhanh nhưng có thể mất gói nếu mạng kém</li>
+ *   <li>Polling chậm nhưng đảm bảo cuối cùng cũng sync được</li>
+ *   <li>Kết hợp: vừa realtime, vừa robust</li>
  * </ul>
  */
 public class AuctionDetailController {
 
-    @FXML private Label userInfoLabel;
-    @FXML private Label itemNameLabel;
-    @FXML private Label categoryLabel;
-    @FXML private Label descriptionLabel;
-    @FXML private Label startPriceLabel;
-    @FXML private Label sellerLabel;
-    @FXML private Label statusLabel;
-    @FXML private Label timerLabel;
-    @FXML private Label currentPriceLabel;
-    @FXML private Label highestBidderLabel;
-    @FXML private Label totalBidsLabel;
-    @FXML private Label antiSnipeLabel;
-    @FXML private Label bidErrorLabel;
-    @FXML private Label bidSuccessLabel;
-    @FXML private TextField bidAmountField;
-    @FXML private TextField maxBidField;
-    @FXML private TextField incrementField;
-    @FXML private Button btnPlaceBid;
-    @FXML private ListView<String> bidHistoryList;
-    @FXML private LineChart<String, Number> priceChart;
-    @FXML private CategoryAxis xAxis;
-    @FXML private NumberAxis yAxis;
+    // ===== LABEL HIỂN THỊ THÔNG TIN =====
+    @FXML private Label userInfoLabel;         // Tên + role user đang login
+    @FXML private Label itemNameLabel;         // Tên sản phẩm
+    @FXML private Label categoryLabel;         // Loại sản phẩm
+    @FXML private Label descriptionLabel;      // Mô tả
+    @FXML private Label startPriceLabel;       // Giá khởi điểm
+    @FXML private Label sellerLabel;           // Tên seller
+    @FXML private Label statusLabel;           // Badge trạng thái (Đang chạy / Kết thúc...)
+    @FXML private Label timerLabel;            // Countdown timer còn lại
+    @FXML private Label currentPriceLabel;     // Giá cao nhất hiện tại
+    @FXML private Label highestBidderLabel;    // Người dẫn đầu hiện tại
+    @FXML private Label totalBidsLabel;        // Tổng số lượt bid
+    @FXML private Label antiSnipeLabel;        // Hiển thị số lần đã gia hạn
 
+    // ===== MESSAGES =====
+    @FXML private Label bidErrorLabel;         // Lỗi khi bid (đỏ)
+    @FXML private Label bidSuccessLabel;       // Thành công (xanh)
+
+    // ===== INPUT FIELDS =====
+    @FXML private TextField bidAmountField;    // Ô nhập số tiền bid thủ công
+    @FXML private TextField maxBidField;       // Ô nhập maxBid (auto-bid)
+    @FXML private TextField incrementField;    // Ô nhập increment (auto-bid)
+    @FXML private Button btnPlaceBid;          // Nút "Đặt giá"
+
+    // ===== CHART & HISTORY =====
+    @FXML private ListView<String> bidHistoryList; // List hiển thị lịch sử bid
+    @FXML private LineChart<String, Number> priceChart; // Biểu đồ giá theo thời gian
+    @FXML private CategoryAxis xAxis;          // Trục X (thời gian)
+    @FXML private NumberAxis yAxis;            // Trục Y (giá)
+
+    // ===== STATE =====
+    /** ID phiên đang xem - set từ DashboardController qua setAuctionId(). */
     private String auctionId;
-    private final AuctionClient client = AuctionClient.getInstance();
+    private final AuctionClientService auctionClientService = AuctionClientService.getInstance();
+    /** Snapshot mới nhất của auction (lấy từ server). */
     private Auction currentAuction;
+    /** Timer chạy mỗi giây - chỉ update countdown timer (không gọi server). */
     private Timer countdownTimer;
+    /** Timer chạy mỗi 2s - sync data từ server. */
     private Timer syncTimer;
+    /** Data series cho biểu đồ giá. */
     private XYChart.Series<String, Number> priceSeries;
+    /** Hash của data biểu đồ - tránh rebuild chart nếu data không đổi. */
     private String lastChartFingerprint;
 
     /** Lắng nghe BID_UPDATE / AUCTION_EVENT đẩy từ server. */
-    private final AuctionClient.PushListener serverListener = msg -> {
+    private final AuctionClientService.Listener serverListener = msg -> {
         // Chỉ refresh nếu event liên quan đến phiên này
         String eventAuctionId = msg.get("auctionId");
         if (eventAuctionId != null && eventAuctionId.equals(auctionId)) {
@@ -120,7 +159,14 @@ public class AuctionDetailController {
 
     public void setAuctionId(String auctionId) {
         this.auctionId = auctionId;
-        client.addPushListener(serverListener);
+        auctionClientService.addPushListener(serverListener);
+        // Observer Pattern: chỉ subscribe phiên đang xem — server sẽ
+        // chỉ push BID_UPDATE / AUCTION_EVENT của phiên này cho client.
+        try {
+            auctionClientService.subscribeAuction(auctionId);
+        } catch (IOException e) {
+            System.err.println("[AuctionDetail] Không subscribe được phiên: " + e.getMessage());
+        }
         reloadAuction();
         startCountdown();
         startSyncTimer();
@@ -129,7 +175,7 @@ public class AuctionDetailController {
     /** Tải lại auction từ server. */
     private void reloadAuction() {
         try {
-            currentAuction = client.getAuction(auctionId);
+            currentAuction = auctionClientService.getAuction(auctionId);
             loadAuctionData();
         } catch (IOException e) {
             // ignore — UI giữ trạng thái cũ, sync timer sẽ thử lại
@@ -302,7 +348,7 @@ public class AuctionDetailController {
 
         try {
             double amount = Double.parseDouble(amountText);
-            client.placeBid(auctionId, amount);
+            auctionClientService.placeBid(auctionId, amount);
             showBidSuccess(String.format("Đặt giá thành công: %,.0f VNĐ", amount));
             bidAmountField.clear();
             reloadAuction();
@@ -336,7 +382,7 @@ public class AuctionDetailController {
             double maxBid = Double.parseDouble(maxText);
             double increment = Double.parseDouble(incText);
 
-            client.registerAutoBid(auctionId, maxBid, increment);
+            auctionClientService.registerAutoBid(auctionId, maxBid, increment);
             showBidSuccess("Auto-Bid đã được kích hoạt!");
             maxBidField.clear();
             incrementField.clear();
@@ -363,7 +409,16 @@ public class AuctionDetailController {
             syncTimer.cancel();
             syncTimer = null;
         }
-        client.removePushListener(serverListener);
+        auctionClientService.removePushListener(serverListener);
+        // Hủy subscribe để server không còn push event của phiên này cho client.
+        if (auctionId != null) {
+            try {
+                auctionClientService.unsubscribeAuction(auctionId);
+            } catch (IOException e) {
+                // Best-effort: nếu socket đã đóng thì server cũng sẽ tự dọn ở finally của ClientHandler.
+                System.err.println("[AuctionDetail] Không unsubscribe được: " + e.getMessage());
+            }
+        }
     }
 
     private void hideBidMessages() {
