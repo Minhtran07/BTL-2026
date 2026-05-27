@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.model.item.Item;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 import java.util.Optional;
@@ -30,7 +31,7 @@ public class GetItemHandler implements RequestHandler {
         Optional<Item> opt = auctionService.getItem(request.get("itemId"));
         if (opt.isEmpty()) return HandlerUtils.error("Không tìm thấy sản phẩm");
 
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.setBody(opt.get()); // gửi nguyên object qua body
         return response;
     }

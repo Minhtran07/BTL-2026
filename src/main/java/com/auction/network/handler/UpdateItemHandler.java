@@ -4,6 +4,7 @@ import com.auction.model.item.Item;
 import com.auction.model.user.User;
 import com.auction.model.user.UserRole;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 /**
@@ -45,7 +46,7 @@ public class UpdateItemHandler implements RequestHandler {
         }
 
         auctionService.updateItem(item);
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("message", "Đã lưu thay đổi");
         return response;
     }

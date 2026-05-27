@@ -4,6 +4,7 @@ import com.auction.model.item.Item;
 import com.auction.model.user.User;
 import com.auction.model.user.UserRole;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 import java.util.Optional;
@@ -43,7 +44,7 @@ public class DeleteItemHandler implements RequestHandler {
         }
 
         auctionService.deleteItem(itemId);
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("message", "Đã xóa sản phẩm");
         return response;
     }

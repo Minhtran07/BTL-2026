@@ -2,6 +2,8 @@ package com.auction.network.server;
 
 import com.auction.model.transaction.BidTransaction;
 import com.auction.network.message.Message;
+import com.auction.network.message.push.AuctionEventPush;
+import com.auction.network.message.push.BidUpdatePush;
 import com.auction.pattern.observer.AuctionEvent;
 import com.auction.pattern.observer.AuctionObserver;
 
@@ -140,25 +142,19 @@ public class PushForwarder implements AuctionObserver {
      * auctionId, eventType, message, bidderId, bidderName, bidAmount, bidTime.
      */
     private static Message toMessage(AuctionEvent event) {
-        // Xác định loại message theo event type
         boolean isBid = event.getType() == AuctionEvent.EventType.NEW_BID
                 || event.getType() == AuctionEvent.EventType.AUTO_BID;
 
-        Message msg = new Message(isBid ? Message.Type.BID_UPDATE : Message.Type.AUCTION_EVENT);
-        msg.put("auctionId", event.getAuctionId());
-        msg.put("eventType", event.getType().name());
-        if (event.getMessage() != null) {
-            msg.put("message", event.getMessage());
+        if (isBid) {
+            return new BidUpdatePush(
+                    event.getAuctionId(),
+                    event.getType().name(),
+                    event.getTransaction());
+        } else {
+            return new AuctionEventPush(
+                    event.getAuctionId(),
+                    event.getType().name(),
+                    event.getMessage());
         }
-
-        // Nếu là event bid → thêm thông tin transaction
-        BidTransaction tx = event.getTransaction();
-        if (tx != null) {
-            msg.put("bidderId",   tx.getBidderId());
-            msg.put("bidderName", tx.getBidderName());
-            msg.put("bidAmount",  String.valueOf(tx.getBidAmount()));
-            msg.put("bidTime",    tx.getBidTime().toString());
-        }
-        return msg;
     }
 }

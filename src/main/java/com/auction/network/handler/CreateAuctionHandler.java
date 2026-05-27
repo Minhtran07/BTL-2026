@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.model.auction.Auction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 import java.time.LocalDateTime;
@@ -45,7 +46,7 @@ public class CreateAuctionHandler implements RequestHandler {
                 Double.parseDouble(request.get("startingPrice")),
                 start, end);
 
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("auctionId", auction.getId());
         return response;
     }

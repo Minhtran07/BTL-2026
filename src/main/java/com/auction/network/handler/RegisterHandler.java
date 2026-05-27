@@ -4,6 +4,7 @@ import com.auction.exception.AuthenticationException;
 import com.auction.model.user.User;
 import com.auction.model.user.UserRole;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.UserService;
 
 /**
@@ -50,7 +51,7 @@ public class RegisterHandler implements RequestHandler {
                     role);
 
             // Trả về full user qua body
-            Message response = new Message(Message.Type.SUCCESS);
+            Response response = Response.success();
             response.setBody(user);
             response.put("userId",  user.getId());
             response.put("message", "Đăng ký thành công");

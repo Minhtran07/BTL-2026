@@ -2,6 +2,9 @@ package com.auction.network.server;
 
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
+import com.auction.network.message.request.SubscribeAuctionRequest;
+import com.auction.network.message.request.UnsubscribeAuctionRequest;
 import com.auction.network.handler.*;
 import com.auction.service.AuctionService;
 import com.auction.service.UserService;
@@ -255,14 +258,22 @@ public class AuctionServer {
          */
         private Message processRequest(Message request) {
             if (request == null || request.getType() == null) {
-                return HandlerUtils.error("Request không hợp lệ");
+                return Response.error("Request không hợp lệ");
             }
 
-            // Observer pattern: SUBSCRIBE/UNSUBSCRIBE thao tác trực tiếp trên handler
-            switch (request.getType()) {
-                case SUBSCRIBE_AUCTION:   return handleSubscribe(request);
-                case UNSUBSCRIBE_AUCTION: return handleUnsubscribe(request);
-                default: /* fall through to handlerMap dispatch */ break;
+            // Đa hình: dispatch subscribe/unsubscribe bằng instanceof
+            if (request instanceof SubscribeAuctionRequest sub) {
+                return handleSubscribe(sub);
+            }
+            if (request instanceof UnsubscribeAuctionRequest unsub) {
+                return handleUnsubscribe(unsub);
+            }
+            // Backward compat: xử lý Message thô dùng Type enum
+            if (request.getType() == Message.Type.SUBSCRIBE_AUCTION) {
+                return handleSubscribe(request);
+            }
+            if (request.getType() == Message.Type.UNSUBSCRIBE_AUCTION) {
+                return handleUnsubscribe(request);
             }
 
             RequestHandler handler = handlerMap.get(request.getType());
@@ -291,12 +302,12 @@ public class AuctionServer {
         private Message handleSubscribe(Message request) {
             String auctionId = request.get("auctionId");
             if (auctionId == null || auctionId.isBlank()) {
-                return HandlerUtils.error("Thiếu auctionId để subscribe");
+                return Response.error("Thiếu auctionId để subscribe");
             }
             if (subscribedAuctions.add(auctionId)) {
                 forwarder.subscribe(auctionId, this);
             }
-            Message ok = new Message(Message.Type.SUCCESS);
+            Response ok = Response.success();
             ok.put("auctionId", auctionId);
             ok.put("message", "Đã subscribe phiên " + auctionId);
             return ok;
@@ -305,12 +316,12 @@ public class AuctionServer {
         private Message handleUnsubscribe(Message request) {
             String auctionId = request.get("auctionId");
             if (auctionId == null || auctionId.isBlank()) {
-                return HandlerUtils.error("Thiếu auctionId để unsubscribe");
+                return Response.error("Thiếu auctionId để unsubscribe");
             }
             if (subscribedAuctions.remove(auctionId)) {
                 forwarder.unsubscribe(auctionId, this);
             }
-            Message ok = new Message(Message.Type.SUCCESS);
+            Response ok = Response.success();
             ok.put("auctionId", auctionId);
             ok.put("message", "Đã unsubscribe phiên " + auctionId);
             return ok;

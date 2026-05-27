@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 import java.util.ArrayList;
@@ -29,7 +30,7 @@ public class GetBidHistoryHandler implements RequestHandler {
         List<BidTransaction> history = new ArrayList<>(
                 auctionService.getBidHistory(request.get("auctionId")));
 
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("count", String.valueOf(history.size()));
         response.setBody((java.io.Serializable) history);
         return response;

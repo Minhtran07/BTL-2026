@@ -2,6 +2,7 @@ package com.auction.network.handler;
 
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 /**
@@ -29,7 +30,7 @@ public class EndAuctionHandler implements RequestHandler {
 
         auctionService.endAuction(request.get("auctionId"));
 
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("message", "Phiên đấu giá đã kết thúc");
         return response;
     }

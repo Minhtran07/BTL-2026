@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.model.item.Item;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ public class GetAllItemsHandler implements RequestHandler {
     public Message handle(Message request, User authenticatedUser) {
         // Copy sang ArrayList (đảm bảo Serializable)
         List<Item> items = new ArrayList<>(auctionService.getAllItems());
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("count", String.valueOf(items.size()));
         response.setBody((java.io.Serializable) items);
         return response;

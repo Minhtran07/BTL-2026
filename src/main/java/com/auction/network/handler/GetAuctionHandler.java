@@ -4,6 +4,7 @@ import com.auction.dao.AuctionDaoImpl;
 import com.auction.model.auction.Auction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.pattern.singleton.AuctionManager;
 import com.auction.service.AuctionService;
 
@@ -40,7 +41,7 @@ public class GetAuctionHandler implements RequestHandler {
         Auction a = opt.get();
         AuctionManager.getInstance().addAuction(a);
 
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.setBody(a);
         return response;
     }
