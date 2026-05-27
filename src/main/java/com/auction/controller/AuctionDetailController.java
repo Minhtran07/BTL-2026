@@ -101,8 +101,6 @@ public class AuctionDetailController {
     private Auction currentAuction;
     /** Timer chạy mỗi giây - chỉ update countdown timer (không gọi server). */
     private Timer countdownTimer;
-    /** Timer chạy mỗi 2s - sync data từ server. */
-    private Timer syncTimer;
     /** Data series cho biểu đồ giá. */
     private XYChart.Series<String, Number> priceSeries;
     /** Hash của data biểu đồ - tránh rebuild chart nếu data không đổi. */
@@ -169,7 +167,6 @@ public class AuctionDetailController {
         }
         reloadAuction();
         startCountdown();
-        startSyncTimer();
     }
 
     /** Tải lại auction từ server. */
@@ -181,23 +178,6 @@ public class AuctionDetailController {
             // ignore — UI giữ trạng thái cũ, sync timer sẽ thử lại
             System.err.println("[AuctionDetail] Không tải được phiên: " + e.getMessage());
         }
-    }
-
-    private void startSyncTimer() {
-        syncTimer = new Timer(true);
-        syncTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                Platform.runLater(() -> {
-                    try {
-                        if (currentPriceLabel == null || currentPriceLabel.getScene() == null) return;
-                        reloadAuction();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
-            }
-        }, 2000, 2000);
     }
 
     private void loadAuctionData() {
@@ -404,10 +384,6 @@ public class AuctionDetailController {
         if (countdownTimer != null) {
             countdownTimer.cancel();
             countdownTimer = null;
-        }
-        if (syncTimer != null) {
-            syncTimer.cancel();
-            syncTimer = null;
         }
         auctionClientService.removePushListener(serverListener);
         // Hủy subscribe để server không còn push event của phiên này cho client.

@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -74,14 +75,19 @@ public class DashboardController {
 
     private final AuctionClientService auctionClientService = AuctionClientService.getInstance();
 
-    /** Timer chạy nền refresh danh sách mỗi 5s (cho countdown timer). */
-    private Timer refreshTimer;
+    /** Timer cục bộ cập nhật countdown trên card mỗi giây (không gọi server). */
+    private Timer countdownTimer;
 
     /** Cache danh sách auction để hiển thị + filter local. */
     private List<Auction> currentAuctions = List.of();
 
     /** Cờ chuyển đổi giữa view "tất cả" và view "của tôi". */
     private boolean showingMyItems = false;
+
+    /** Lưu tham chiếu các label countdown trên card để timer cập nhật cục bộ. */
+    private final List<TimerLabelEntry> timerLabels = new ArrayList<>();
+
+    private record TimerLabelEntry(Label label, Auction auction) {}
 
     /**
      * Listener nhận push event từ server (vd: bid mới ở phiên nào đó).
@@ -154,25 +160,18 @@ public class DashboardController {
         // Load danh sách lần đầu
         refreshAuctionList();
 
-        // ===== Timer auto-refresh mỗi 5s =====
-        // Mục đích: cập nhật countdown timer (giây) trên các card.
-        // Timer(true) = daemon thread → tự động chết khi JVM thoát.
-        refreshTimer = new Timer(true);
-        refreshTimer.scheduleAtFixedRate(new TimerTask() {
+        // Timer cục bộ 1s — chỉ cập nhật countdown trên card, KHÔNG gọi server.
+        // Dữ liệu thực (giá, trạng thái) được cập nhật qua push listener ở trên.
+        countdownTimer = new Timer(true);
+        countdownTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                // Platform.runLater(): chuyển code sang JavaFX thread để update UI
                 Platform.runLater(() -> {
-                    try {
-                        if (auctionFlowPane != null && auctionFlowPane.getScene() != null) {
-                            refreshAuctionList();
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    if (auctionFlowPane == null || auctionFlowPane.getScene() == null) return;
+                    updateCountdownLabels();
                 });
             }
-        }, 5000, 5000); // initialDelay=5s, period=5s
+        }, 1000, 1000);
 
         // Lắng nghe khi scene bị remove (user navigate đi nơi khác) → cleanup
         // để tránh memory leak (timer + listener vẫn chạy ngầm)
@@ -188,9 +187,9 @@ public class DashboardController {
      * Tránh memory leak (timer chạy ngầm, listener giữ tham chiếu...).
      */
     private void cleanup() {
-        if (refreshTimer != null) {
-            refreshTimer.cancel();
-            refreshTimer = null;
+        if (countdownTimer != null) {
+            countdownTimer.cancel();
+            countdownTimer = null;
         }
         auctionClientService.removePushListener(serverListener);
     }
@@ -208,6 +207,7 @@ public class DashboardController {
      */
     private void refreshAuctionList() {
         auctionFlowPane.getChildren().clear();
+        timerLabels.clear();
 
         try {
             currentAuctions = auctionClientService.getAllAuctions();
@@ -360,9 +360,26 @@ public class DashboardController {
             card.getChildren().add(editBtn);
         }
 
+        if (auction.getStatus() == AuctionStatus.RUNNING) {
+            timerLabels.add(new TimerLabelEntry(timerLabel, auction));
+        }
+
         card.setOnMouseClicked(e -> openAuctionDetail(auction.getId()));
 
         return card;
+    }
+
+    /** Cập nhật countdown cục bộ trên các card RUNNING — không gọi server. */
+    private void updateCountdownLabels() {
+        for (TimerLabelEntry entry : timerLabels) {
+            Duration remaining = Duration.between(LocalDateTime.now(), entry.auction().getEndTime());
+            if (remaining.isNegative()) {
+                entry.label().setText("Đã hết giờ");
+            } else {
+                entry.label().setText(String.format("Còn %02d:%02d:%02d",
+                        remaining.toHours(), remaining.toMinutesPart(), remaining.toSecondsPart()));
+            }
+        }
     }
 
     /**
