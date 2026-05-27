@@ -4,7 +4,7 @@ import com.auction.model.auction.Auction;
 import com.auction.model.item.Item;
 import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
 
 import java.io.IOException;
 import java.util.List;

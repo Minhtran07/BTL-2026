@@ -2,7 +2,7 @@ package com.auction.network.handler;
 
 import com.auction.model.item.Item;
 import com.auction.model.user.User;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
 import com.auction.service.AuctionService;
 
 import java.util.Optional;

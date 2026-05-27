@@ -3,7 +3,7 @@ package com.auction.network.handler;
 import com.auction.dao.AuctionDaoImpl;
 import com.auction.model.auction.Auction;
 import com.auction.model.user.User;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
 import com.auction.pattern.singleton.AuctionManager;
 import com.auction.service.AuctionService;
 

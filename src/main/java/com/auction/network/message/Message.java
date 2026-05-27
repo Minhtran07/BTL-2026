@@ -1,4 +1,4 @@
-package com.auction.network;
+package com.auction.network.message;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -164,6 +164,8 @@ public class Message implements Serializable {
      * Override toString() để dễ log/debug.
      * Chỉ in tên class của body (không in full content - tránh log dài).
      */
+
+    public String getId();
     @Override
     public String toString() {
         return "Message{type=" + type + ", data=" + data

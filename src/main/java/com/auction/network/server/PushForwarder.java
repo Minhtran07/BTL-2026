@@ -1,7 +1,7 @@
 package com.auction.network.server;
 
 import com.auction.model.transaction.BidTransaction;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
 import com.auction.pattern.observer.AuctionEvent;
 import com.auction.pattern.observer.AuctionObserver;
 

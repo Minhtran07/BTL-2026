@@ -1,9 +1,8 @@
 package com.auction.network.server;
 
 import com.auction.model.user.User;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
 import com.auction.network.handler.*;
-import com.auction.pattern.observer.AuctionObserver;
 import com.auction.service.AuctionService;
 import com.auction.service.UserService;
 
