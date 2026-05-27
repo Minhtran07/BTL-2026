@@ -10,8 +10,4 @@ public final class HandlerUtils {
     public static Message error(String message) {
         return Response.error(message);
     }
-
-    public static Message requireLogin(Message.Type type) {
-        return Response.error("Chưa đăng nhập");
-    }
 }

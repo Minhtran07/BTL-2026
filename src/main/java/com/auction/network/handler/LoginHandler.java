@@ -18,25 +18,14 @@ public class LoginHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        String username;
-        String password;
-
-        if (request instanceof LoginRequest loginReq) {
-            username = loginReq.getUsername();
-            password = loginReq.getPassword();
-        } else {
-            username = request.get("username");
-            password = request.get("password");
+        if (!(request instanceof LoginRequest loginReq)) {
+            return HandlerUtils.error("Request không hợp lệ");
         }
 
         try {
-            User user = userService.login(username, password);
+            User user = userService.login(loginReq.getUsername(), loginReq.getPassword());
             this.lastAuthenticatedUser = user;
-
-            Response response = Response.success(user);
-            response.put("userId", user.getId());
-            response.put("role", user.getRole().name());
-            return response;
+            return Response.success(user);
         } catch (AuthenticationException e) {
             return Response.error(e.getMessage());
         }

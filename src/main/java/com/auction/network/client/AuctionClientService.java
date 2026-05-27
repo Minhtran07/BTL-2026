@@ -19,6 +19,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <p>Mỗi method tạo một đối tượng Request cụ thể (LoginRequest,
  * PlaceBidRequest...) thay vì nhồi dữ liệu vào map chung — đảm bảo
  * kiểu an toàn tại thời điểm biên dịch.
+ *
+ * <p>{@link #ensureSuccess(Message)} dùng {@code instanceof Response<?>}
+ * để kiểm tra và trả body generic — loại bỏ hoàn toàn enum Type và data map.
  */
 public class AuctionClientService {
 
@@ -66,16 +69,14 @@ public class AuctionClientService {
 
     public User login(String username, String password) throws IOException {
         Message resp = client.sendRequest(new LoginRequest(username, password));
-        ensureSuccess(resp);
-        return resp.body();
+        return ensureSuccess(resp);
     }
 
     public User register(String username, String password, String email,
                          String fullName, String role) throws IOException {
         Message resp = client.sendRequest(
                 new RegisterRequest(username, password, email, fullName, role));
-        ensureSuccess(resp);
-        return resp.body();
+        return ensureSuccess(resp);
     }
 
     public void logout() throws IOException {
@@ -88,20 +89,17 @@ public class AuctionClientService {
                              double price, Map<String, String> extra) throws IOException {
         Message resp = client.sendRequest(
                 new CreateItemRequest(category, name, description, price, extra));
-        ensureSuccess(resp);
-        return resp.get("itemId");
+        return ensureSuccess(resp);
     }
 
     public Item getItem(String itemId) throws IOException {
         Message resp = client.sendRequest(new GetItemRequest(itemId));
-        ensureSuccess(resp);
-        return resp.body();
+        return ensureSuccess(resp);
     }
 
     public List<Item> getAllItems() throws IOException {
         Message resp = client.sendRequest(new GetAllItemsRequest());
-        ensureSuccess(resp);
-        List<Item> body = resp.body();
+        List<Item> body = ensureSuccess(resp);
         return body != null ? body : List.of();
     }
 
@@ -121,27 +119,23 @@ public class AuctionClientService {
                                 int durationMinutes) throws IOException {
         Message resp = client.sendRequest(
                 new CreateAuctionRequest(itemId, itemName, startingPrice, durationMinutes));
-        ensureSuccess(resp);
-        return resp.get("auctionId");
+        return ensureSuccess(resp);
     }
 
     public Auction getAuction(String auctionId) throws IOException {
         Message resp = client.sendRequest(new GetAuctionRequest(auctionId));
-        ensureSuccess(resp);
-        return resp.body();
+        return ensureSuccess(resp);
     }
 
     public List<Auction> getAllAuctions() throws IOException {
         Message resp = client.sendRequest(new GetAllAuctionsRequest());
-        ensureSuccess(resp);
-        List<Auction> body = resp.body();
+        List<Auction> body = ensureSuccess(resp);
         return body != null ? body : List.of();
     }
 
     public List<Auction> getActiveAuctions() throws IOException {
         Message resp = client.sendRequest(new GetActiveAuctionsRequest());
-        ensureSuccess(resp);
-        List<Auction> body = resp.body();
+        List<Auction> body = ensureSuccess(resp);
         return body != null ? body : List.of();
     }
 
@@ -183,8 +177,7 @@ public class AuctionClientService {
 
     public List<BidTransaction> getBidHistory(String auctionId) throws IOException {
         Message resp = client.sendRequest(new GetBidHistoryRequest(auctionId));
-        ensureSuccess(resp);
-        List<BidTransaction> body = resp.body();
+        List<BidTransaction> body = ensureSuccess(resp);
         return body != null ? body : List.of();
     }
 
@@ -192,8 +185,7 @@ public class AuctionClientService {
 
     public List<User> getAllUsers() throws IOException {
         Message resp = client.sendRequest(new GetAllUsersRequest());
-        ensureSuccess(resp);
-        List<User> body = resp.body();
+        List<User> body = ensureSuccess(resp);
         return body != null ? body : List.of();
     }
 
@@ -204,12 +196,28 @@ public class AuctionClientService {
 
     // ========== HELPERS ==========
 
-    private static void ensureSuccess(Message resp) throws IOException {
+    /**
+     * Kiểm tra response từ server và trả body generic.
+     *
+     * <p>Dùng {@code instanceof Response<?>} thay vì enum Type.ERROR
+     * để phân loại thành công/thất bại — loại bỏ hoàn toàn dependency
+     * vào Message.Type.
+     *
+     * @param <T> kiểu body mong đợi (User, Item, List<Auction>...)
+     * @return body từ Response nếu thành công (có thể null cho void)
+     * @throws IOException nếu response null, không hợp lệ, hoặc lỗi
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> T ensureSuccess(Message resp) throws IOException {
         if (resp == null) throw new IOException("Server không phản hồi");
-        if (resp.getType() == Message.Type.ERROR) {
-            String err = resp.get("error");
-            throw new IOException(err != null ? err : "Lỗi không xác định");
+        if (!(resp instanceof Response<?> response)) {
+            throw new IOException("Phản hồi không hợp lệ");
         }
+        if (!response.isSuccess()) {
+            throw new IOException(response.getErrorMessage() != null
+                    ? response.getErrorMessage() : "Lỗi không xác định");
+        }
+        return (T) response.getBody();
     }
 
     public interface Listener {

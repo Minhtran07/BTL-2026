@@ -5,6 +5,7 @@ import com.auction.model.auction.Auction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.request.GetAuctionRequest;
 import com.auction.pattern.singleton.AuctionManager;
 import com.auction.service.AuctionService;
 
@@ -15,11 +16,8 @@ import java.util.Optional;
  * GETAUCTIONHANDLER - LẤY THÔNG TIN 1 PHIÊN ĐẤU GIÁ THEO ID
  * ============================================================================
  *
- * <p>Trả về full Auction object qua body. Dùng khi client mở màn hình
- * chi tiết phiên đấu giá.
- *
- * <p>Đọc thẳng từ DAO (giống GetAllAuctions) để đảm bảo data mới nhất,
- * không bị stale do cache.
+ * <p>Trả về full Auction object qua body. Đọc thẳng từ DAO để đảm bảo
+ * data mới nhất, không bị stale do cache.
  */
 public class GetAuctionHandler implements RequestHandler {
 
@@ -33,16 +31,16 @@ public class GetAuctionHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        String id = request.get("auctionId");
+        if (!(request instanceof GetAuctionRequest req)) {
+            return HandlerUtils.error("Request không hợp lệ");
+        }
 
-        Optional<Auction> opt = auctionDao.findById(id);
+        Optional<Auction> opt = auctionDao.findById(req.getAuctionId());
         if (opt.isEmpty()) return HandlerUtils.error("Không tìm thấy phiên đấu giá");
 
         Auction a = opt.get();
         AuctionManager.getInstance().addAuction(a);
 
-        Response response = Response.success();
-        response.setBody(a);
-        return response;
+        return Response.success(a);
     }
 }

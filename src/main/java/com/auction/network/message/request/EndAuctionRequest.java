@@ -8,9 +8,7 @@ public class EndAuctionRequest extends Request {
     private final String auctionId;
 
     public EndAuctionRequest(String auctionId) {
-        super(Type.END_AUCTION);
         this.auctionId = auctionId;
-        put("auctionId", auctionId);
     }
 
     public String getAuctionId() { return auctionId; }

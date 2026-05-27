@@ -12,8 +12,7 @@ public abstract class Request extends Message {
 
     private final String requestId;
 
-    protected Request(Type type) {
-        super(type);
+    protected Request() {
         this.requestId = UUID.randomUUID().toString();
     }
 

@@ -13,17 +13,11 @@ public class RegisterRequest extends Request {
 
     public RegisterRequest(String username, String password,
                            String email, String fullName, String role) {
-        super(Type.REGISTER);
         this.username = username;
         this.password = password;
         this.email = email;
         this.fullName = fullName;
         this.role = role;
-        put("username", username);
-        put("password", password);
-        put("email", email);
-        put("fullName", fullName);
-        put("role", role);
     }
 
     public String getUsername() { return username; }

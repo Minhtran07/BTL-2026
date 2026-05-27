@@ -8,9 +8,7 @@ public class SubscribeAuctionRequest extends Request {
     private final String auctionId;
 
     public SubscribeAuctionRequest(String auctionId) {
-        super(Type.SUBSCRIBE_AUCTION);
         this.auctionId = auctionId;
-        put("auctionId", auctionId);
     }
 
     public String getAuctionId() { return auctionId; }

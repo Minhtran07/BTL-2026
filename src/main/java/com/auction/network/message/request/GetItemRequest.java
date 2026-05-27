@@ -8,9 +8,7 @@ public class GetItemRequest extends Request {
     private final String itemId;
 
     public GetItemRequest(String itemId) {
-        super(Type.GET_ITEM);
         this.itemId = itemId;
-        put("itemId", itemId);
     }
 
     public String getItemId() { return itemId; }

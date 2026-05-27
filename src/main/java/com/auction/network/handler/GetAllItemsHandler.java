@@ -6,19 +6,15 @@ import com.auction.network.message.Message;
 import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
+import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * ============================================================================
  * GETALLITEMSHANDLER - LẤY TẤT CẢ ITEM TRONG HỆ THỐNG
  * ============================================================================
  *
- * <p>Trả về List&lt;Item&gt; qua body + size qua data["count"].
- *
- * <p><b>Cast (Serializable) cần thiết:</b> Mặc dù ArrayList implements
- * Serializable, signature của setBody() yêu cầu Serializable nên phải cast
- * tường minh.
+ * <p>Trả về {@code ArrayList<Item>} qua body của Response generic.
  */
 public class GetAllItemsHandler implements RequestHandler {
 
@@ -30,11 +26,7 @@ public class GetAllItemsHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        // Copy sang ArrayList (đảm bảo Serializable)
-        List<Item> items = new ArrayList<>(auctionService.getAllItems());
-        Response response = Response.success();
-        response.put("count", String.valueOf(items.size()));
-        response.setBody((java.io.Serializable) items);
-        return response;
+        ArrayList<Item> items = new ArrayList<>(auctionService.getAllItems());
+        return Response.success((Serializable) items);
     }
 }

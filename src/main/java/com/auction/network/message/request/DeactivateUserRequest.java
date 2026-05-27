@@ -8,9 +8,7 @@ public class DeactivateUserRequest extends Request {
     private final String userId;
 
     public DeactivateUserRequest(String userId) {
-        super(Type.DEACTIVATE_USER);
         this.userId = userId;
-        put("userId", userId);
     }
 
     public String getUserId() { return userId; }

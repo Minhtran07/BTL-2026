@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.request.CancelAuctionRequest;
 import com.auction.service.AuctionService;
 
 /**
@@ -10,10 +11,7 @@ import com.auction.service.AuctionService;
  * CANCELAUCTIONHANDLER - HỦY PHIÊN ĐẤU GIÁ
  * ============================================================================
  *
- * <p>Khi seller hủy phiên: chuyển status → CANCELED.
- * KHÔNG settlement (không có winner thực sự).
- *
- * <p>TODO: Nên kiểm tra quyền - chỉ seller của phiên hoặc admin được phép hủy.
+ * <p>Chuyển status → CANCELED. KHÔNG settlement.
  */
 public class CancelAuctionHandler implements RequestHandler {
 
@@ -26,11 +24,11 @@ public class CancelAuctionHandler implements RequestHandler {
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (authenticatedUser == null) return HandlerUtils.error("Chưa đăng nhập");
+        if (!(request instanceof CancelAuctionRequest req)) {
+            return HandlerUtils.error("Request không hợp lệ");
+        }
 
-        auctionService.cancelAuction(request.get("auctionId"));
-
-        Response response = Response.success();
-        response.put("message", "Phiên đấu giá đã hủy");
-        return response;
+        auctionService.cancelAuction(req.getAuctionId());
+        return Response.success();
     }
 }

@@ -2,7 +2,6 @@ package com.auction.network.handler;
 
 import com.auction.exception.AuctionClosedException;
 import com.auction.exception.InvalidBidException;
-import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
@@ -20,29 +19,18 @@ public class PlaceBidHandler implements RequestHandler {
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (authenticatedUser == null) return Response.error("Chưa đăng nhập");
-
-        String auctionId;
-        double amount;
-
-        if (request instanceof PlaceBidRequest bidReq) {
-            auctionId = bidReq.getAuctionId();
-            amount = bidReq.getAmount();
-        } else {
-            auctionId = request.get("auctionId");
-            amount = Double.parseDouble(request.get("amount"));
+        if (!(request instanceof PlaceBidRequest bidReq)) {
+            return HandlerUtils.error("Request không hợp lệ");
         }
 
         try {
-            BidTransaction tx = auctionService.placeBid(
-                    auctionId,
+            auctionService.placeBid(
+                    bidReq.getAuctionId(),
                     authenticatedUser.getId(),
                     authenticatedUser.getFullName(),
-                    amount);
+                    bidReq.getAmount());
 
-            Response response = Response.success();
-            response.put("bidAmount", String.valueOf(tx.getBidAmount()));
-            response.put("message", "Đặt giá thành công");
-            return response;
+            return Response.success();
         } catch (InvalidBidException | AuctionClosedException e) {
             return Response.error(e.getMessage());
         }

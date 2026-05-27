@@ -4,18 +4,18 @@ import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.request.GetBidHistoryRequest;
 import com.auction.service.AuctionService;
 
+import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * ============================================================================
  * GETBIDHISTORYHANDLER - LẤY LỊCH SỬ BID CỦA 1 PHIÊN
  * ============================================================================
  *
- * <p>Trả về List&lt;BidTransaction&gt; của 1 auction - dùng để hiển thị
- * biểu đồ giá theo thời gian và danh sách các lượt đặt giá.
+ * <p>Trả về {@code ArrayList<BidTransaction>} qua body của Response.
  */
 public class GetBidHistoryHandler implements RequestHandler {
 
@@ -27,12 +27,13 @@ public class GetBidHistoryHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        List<BidTransaction> history = new ArrayList<>(
-                auctionService.getBidHistory(request.get("auctionId")));
+        if (!(request instanceof GetBidHistoryRequest req)) {
+            return HandlerUtils.error("Request không hợp lệ");
+        }
 
-        Response response = Response.success();
-        response.put("count", String.valueOf(history.size()));
-        response.setBody((java.io.Serializable) history);
-        return response;
+        ArrayList<BidTransaction> history = new ArrayList<>(
+                auctionService.getBidHistory(req.getAuctionId()));
+
+        return Response.success((Serializable) history);
     }
 }

@@ -7,6 +7,7 @@ import com.auction.model.auction.AuctionStatus;
 import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
 import com.auction.network.client.AuctionClientService;
+import com.auction.network.message.push.PushMessage;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -108,9 +109,8 @@ public class AuctionDetailController {
 
     /** Lắng nghe BID_UPDATE / AUCTION_EVENT đẩy từ server. */
     private final AuctionClientService.Listener serverListener = msg -> {
-        // Chỉ refresh nếu event liên quan đến phiên này
-        String eventAuctionId = msg.get("auctionId");
-        if (eventAuctionId != null && eventAuctionId.equals(auctionId)) {
+        // Đa hình: lọc push event theo auctionId bằng instanceof PushMessage
+        if (msg instanceof PushMessage push && push.getAuctionId().equals(auctionId)) {
             Platform.runLater(this::reloadAuction);
         }
     };

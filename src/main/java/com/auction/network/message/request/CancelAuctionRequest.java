@@ -8,9 +8,7 @@ public class CancelAuctionRequest extends Request {
     private final String auctionId;
 
     public CancelAuctionRequest(String auctionId) {
-        super(Type.CANCEL_AUCTION);
         this.auctionId = auctionId;
-        put("auctionId", auctionId);
     }
 
     public String getAuctionId() { return auctionId; }
