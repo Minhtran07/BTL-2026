@@ -112,59 +112,9 @@ public class AuctionManager {
         }, delayInSeconds, TimeUnit.SECONDS);
     }
 
-    private void startAuctionMonitor() {
-        scheduler.scheduleAtFixedRate(() -> {
-            try {
-                LocalDateTime now = LocalDateTime.now();
-                // Duyệt tất cả auctions trong cache
-                for (Auction auction : auctions.values()) {
-                    // Tự động START phiên khi đến giờ
-                    if (auction.getStatus() == AuctionStatus.OPEN
-                            && now.isAfter(auction.getStartTime())) {
-                        auction.start();
-                    }
-                    // Tự động FINISH phiên khi hết giờ
-                    if (auction.getStatus() == AuctionStatus.RUNNING
-                            && now.isAfter(auction.getEndTime())) {
-                        auction.finish();
-                    }
-                }
-            } catch (Exception e) {
-                // Log lỗi nhưng KHÔNG ném ra ngoài (sẽ làm dừng scheduler)
-                System.err.println("Auction monitor error: " + e.getMessage());
-            }
-        }, 0, 1, TimeUnit.SECONDS);
-    }
-
     /** Thêm 1 phiên đấu giá vào cache. */
     public void addAuction(Auction auction) {
         auctions.put(auction.getId(), auction);
-    }
-
-    /**
-     * Đồng bộ cache với dữ liệu từ DAO (multi-JVM scenario).
-     *
-     * <p><b>Logic:</b>
-     * <ul>
-     *   <li>Nếu auction chưa có trong cache → thêm mới</li>
-     *   <li>Nếu đã có → chỉ cập nhật status và endTime (giữ ReentrantLock cũ
-     *       để tránh mất context của các thread đang bid)</li>
-     * </ul>
-     */
-    public void syncAuctions(java.util.Collection<Auction> loaded) {
-        for (Auction loadedAuction : loaded) {
-            Auction existing = auctions.get(loadedAuction.getId());
-            if (existing == null) {
-                // Chưa có → thêm mới
-                auctions.put(loadedAuction.getId(), loadedAuction);
-            } else {
-                // Đã có → chỉ merge các field có thể đổi
-                existing.setStatus(loadedAuction.getStatus());
-                if (loadedAuction.getEndTime() != null) {
-                    existing.setEndTime(loadedAuction.getEndTime());
-                }
-            }
-        }
     }
 
     /** Lấy 1 phiên theo id (null nếu không có). */
