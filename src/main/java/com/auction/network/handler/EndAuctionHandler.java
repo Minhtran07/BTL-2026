@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.request.EndAuctionRequest;
 import com.auction.service.AuctionService;
 
 /**
@@ -10,11 +11,7 @@ import com.auction.service.AuctionService;
  * ENDAUCTIONHANDLER - KẾT THÚC PHIÊN ĐẤU GIÁ THỦ CÔNG
  * ============================================================================
  *
- * <p>Khi gọi: phiên chuyển RUNNING → FINISHED, đồng thời thực hiện
- * SETTLEMENT (trừ tiền winner + cộng tiền seller).
- *
- * <p>Thường được gọi tự động bởi server scheduler khi hết giờ, nhưng cũng
- * có thể gọi thủ công (vd: admin force kết thúc).
+ * <p>Phiên chuyển RUNNING → FINISHED, đồng thời thực hiện SETTLEMENT.
  */
 public class EndAuctionHandler implements RequestHandler {
 
@@ -27,11 +24,11 @@ public class EndAuctionHandler implements RequestHandler {
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (authenticatedUser == null) return HandlerUtils.error("Chưa đăng nhập");
+        if (!(request instanceof EndAuctionRequest req)) {
+            return HandlerUtils.error("Request không hợp lệ");
+        }
 
-        auctionService.endAuction(request.get("auctionId"));
-
-        Response response = Response.success();
-        response.put("message", "Phiên đấu giá đã kết thúc");
-        return response;
+        auctionService.endAuction(req.getAuctionId());
+        return Response.success();
     }
 }

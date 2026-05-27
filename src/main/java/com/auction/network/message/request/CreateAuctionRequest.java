@@ -12,15 +12,10 @@ public class CreateAuctionRequest extends Request {
 
     public CreateAuctionRequest(String itemId, String itemName,
                                 double startingPrice, int durationMinutes) {
-        super(Type.CREATE_AUCTION);
         this.itemId = itemId;
         this.itemName = itemName;
         this.startingPrice = startingPrice;
         this.durationMinutes = durationMinutes;
-        put("itemId", itemId);
-        put("itemName", itemName);
-        put("startingPrice", String.valueOf(startingPrice));
-        put("duration", String.valueOf(durationMinutes));
     }
 
     public String getItemId() { return itemId; }

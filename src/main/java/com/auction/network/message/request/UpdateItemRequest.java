@@ -9,9 +9,7 @@ public class UpdateItemRequest extends Request {
     private final Item item;
 
     public UpdateItemRequest(Item item) {
-        super(Type.UPDATE_ITEM);
         this.item = item;
-        setBody(item);
     }
 
     public Item getItem() { return item; }

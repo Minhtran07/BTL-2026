@@ -1,6 +1,7 @@
 package com.auction.network.client;
 
 import com.auction.network.message.Message;
+import com.auction.network.message.push.PushMessage;
 
 import java.io.*;
 import java.net.Socket;
@@ -32,8 +33,8 @@ import java.util.function.Consumer;
  *   <li>Lưu {@link CompletableFuture} vào {@link #pendingResponse}</li>
  *   <li>Thread listener đọc message từ socket:
  *     <ul>
- *       <li>Nếu là push event (BID_UPDATE/AUCTION_EVENT) → gọi pushHandler</li>
- *       <li>Nếu là response (SUCCESS/ERROR) → complete future</li>
+ *       <li>Nếu là {@link PushMessage} → gọi pushHandler</li>
+ *       <li>Nếu là Response → complete future</li>
  *     </ul>
  *   </li>
  *   <li>sendRequest unblock, trả response cho caller</li>
@@ -77,7 +78,7 @@ public class AuctionClient {
   private volatile CompletableFuture<Message> pendingResponse = null;
 
   /**
-   * Callback xử lý push event (BID_UPDATE, AUCTION_EVENT).
+   * Callback xử lý push event (PushMessage subclass).
    */
   private Consumer<Message> pushHandler;
   /**
@@ -201,10 +202,10 @@ public class AuctionClient {
   /**
    * Method chạy trong thread listener - đọc message từ server vô hạn.
    *
-   * <p>Phân loại 2 loại message:
+   * <p>Phân loại 2 loại message bằng đa hình (instanceof):
    * <ul>
-   *   <li>PUSH event (AUCTION_EVENT/BID_UPDATE): gọi pushHandler ngay</li>
-   *   <li>RESPONSE (SUCCESS/ERROR/data): complete future đang chờ</li>
+   *   <li>{@link PushMessage}: gọi pushHandler ngay</li>
+   *   <li>Response: complete future đang chờ</li>
    * </ul>
    *
    * <p>Vòng lặp thoát khi: connected = false, EOFException (server đóng),
@@ -218,19 +219,17 @@ public class AuctionClient {
         // Kiểm tra kiểu (pattern matching for instanceof - Java 16+)
         if (!(obj instanceof Message message)) continue;
 
-        // Đa hình: phân loại bằng instanceof thay vì switch trên enum
-        if (message instanceof com.auction.network.message.push.BidUpdatePush
-                || message instanceof com.auction.network.message.push.AuctionEventPush) {
-          pushHandler.accept(message);
-        } else if (message.getType() == Message.Type.BID_UPDATE
-                || message.getType() == Message.Type.AUCTION_EVENT) {
-          // Backward compat: server cũ gửi Message thường
-          pushHandler.accept(message);
+        // Đa hình: phân loại bằng instanceof — PushMessage vs Response
+        if (message instanceof PushMessage) {
+          if (pushHandler != null) {
+            pushHandler.accept(message);
+          }
         } else {
           if (pendingResponse != null) {
               pendingResponse.complete(message);
           } else {
-            System.err.println("[Client] Nhận phản hồi nhưng không có request đang chờ: " + message.getType());
+            System.err.println("[Client] Nhận phản hồi nhưng không có request đang chờ: "
+                    + message.getClass().getSimpleName());
           }
         }
 

@@ -1,6 +1,8 @@
 package com.auction.network.message.request;
 
 import com.auction.network.message.Request;
+
+import java.util.HashMap;
 import java.util.Map;
 
 public class CreateItemRequest extends Request {
@@ -10,25 +12,21 @@ public class CreateItemRequest extends Request {
     private final String name;
     private final String description;
     private final double price;
+    /** Các field riêng của subtype (brand, model, artist, mileage...). */
+    private final HashMap<String, String> extraFields;
 
     public CreateItemRequest(String category, String name, String description,
                              double price, Map<String, String> extra) {
-        super(Type.CREATE_ITEM);
         this.category = category;
         this.name = name;
         this.description = description;
         this.price = price;
-        put("category", category);
-        put("name", name);
-        put("description", description);
-        put("price", String.valueOf(price));
-        if (extra != null) {
-            extra.forEach(this::put);
-        }
+        this.extraFields = extra != null ? new HashMap<>(extra) : new HashMap<>();
     }
 
     public String getCategory() { return category; }
     public String getName() { return name; }
     public String getDescription() { return description; }
     public double getPrice() { return price; }
+    public Map<String, String> getExtraFields() { return extraFields; }
 }

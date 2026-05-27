@@ -5,6 +5,7 @@ import com.auction.model.user.User;
 import com.auction.model.user.UserRole;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.request.RegisterRequest;
 import com.auction.service.UserService;
 
 /**
@@ -33,31 +34,26 @@ public class RegisterHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        try {
-            // Parse role từ String → enum
-            UserRole role = UserRole.valueOf(request.get("role"));
+        if (!(request instanceof RegisterRequest req)) {
+            return HandlerUtils.error("Request không hợp lệ");
+        }
 
-            // Chặn đăng ký Admin qua UI
+        try {
+            UserRole role = UserRole.valueOf(req.getRole());
+
             if (role == UserRole.ADMIN) {
                 return HandlerUtils.error("Không được phép đăng ký với vai trò Admin");
             }
 
-            // Gọi service đăng ký (sẽ validate + hash password)
             User user = userService.register(
-                    request.get("username"),
-                    request.get("password"),
-                    request.get("email"),
-                    request.get("fullName"),
+                    req.getUsername(),
+                    req.getPassword(),
+                    req.getEmail(),
+                    req.getFullName(),
                     role);
 
-            // Trả về full user qua body
-            Response response = Response.success();
-            response.setBody(user);
-            response.put("userId",  user.getId());
-            response.put("message", "Đăng ký thành công");
-            return response;
+            return Response.success(user);
         } catch (AuthenticationException e) {
-            // Validate fail (trùng username, password yếu...)
             return HandlerUtils.error(e.getMessage());
         }
     }

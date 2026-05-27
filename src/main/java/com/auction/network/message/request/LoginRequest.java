@@ -9,11 +9,8 @@ public class LoginRequest extends Request {
     private final String password;
 
     public LoginRequest(String username, String password) {
-        super(Type.LOGIN);
         this.username = username;
         this.password = password;
-        put("username", username);
-        put("password", password);
     }
 
     public String getUsername() { return username; }

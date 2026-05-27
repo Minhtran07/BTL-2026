@@ -5,7 +5,5 @@ import com.auction.network.message.Request;
 public class GetActiveAuctionsRequest extends Request {
     private static final long serialVersionUID = 1L;
 
-    public GetActiveAuctionsRequest() {
-        super(Type.GET_ACTIVE_AUCTIONS);
-    }
+    public GetActiveAuctionsRequest() {}
 }

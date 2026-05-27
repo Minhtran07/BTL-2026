@@ -10,13 +10,9 @@ public class RegisterAutoBidRequest extends Request {
     private final double increment;
 
     public RegisterAutoBidRequest(String auctionId, double maxBid, double increment) {
-        super(Type.REGISTER_AUTO_BID);
         this.auctionId = auctionId;
         this.maxBid = maxBid;
         this.increment = increment;
-        put("auctionId", auctionId);
-        put("maxBid", String.valueOf(maxBid));
-        put("increment", String.valueOf(increment));
     }
 
     public String getAuctionId() { return auctionId; }
