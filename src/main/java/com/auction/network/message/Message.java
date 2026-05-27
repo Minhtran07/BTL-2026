@@ -165,7 +165,7 @@ public class Message implements Serializable {
      * Chỉ in tên class của body (không in full content - tránh log dài).
      */
 
-    public String getId();
+    public String getId() { return "ok"; };
     @Override
     public String toString() {
         return "Message{type=" + type + ", data=" + data

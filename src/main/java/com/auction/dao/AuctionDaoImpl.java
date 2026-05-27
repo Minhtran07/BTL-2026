@@ -7,25 +7,38 @@ import com.auction.model.auction.AutoBidConfig;
 import com.auction.model.transaction.BidTransaction;
 
 import java.lang.reflect.Field;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * AuctionDao dùng SQLite.
+ * ============================================================================
+ * AUCTIONDAOIMPL - TRIỂN KHAI DAO CHO AUCTION (PHIÊN ĐẤU GIÁ)
+ * ============================================================================
  *
- * <p>Mỗi {@link Auction} được lưu thành 3 bảng:
- * <ul>
- *   <li>{@code auctions} — thuộc tính scalar của auction</li>
- *   <li>{@code bid_transactions} — bidHistory (1-N)</li>
- *   <li>{@code auto_bid_configs} — autoBids (1-N, key bidder_id duy nhất)</li>
- * </ul>
+ * <p>Class này phức tạp hơn UserDaoImpl/ItemDaoImpl vì Auction có 2 collection
+ * con phải lưu sang bảng phụ:
+ * <ol>
+ *   <li>{@code bid_transactions} - lịch sử bid (1 auction → N bids)</li>
+ *   <li>{@code auto_bid_configs} - cấu hình auto-bid (1 auction → N configs)</li>
+ * </ol>
  *
- * <p>SQLite mặc định serialize ghi bằng file lock nên không cần custom merge
- * như phiên bản file-serialization cũ. Mỗi {@code save/update} chạy trong
- * transaction để bid history và scalar fields đồng bộ.
+ * <p><b>TRANSACTION HANDLING:</b> Mỗi {@code save()} chạy trong 1 transaction
+ * (setAutoCommit(false) + commit/rollback) để đảm bảo nhất quán: hoặc cả
+ * auction + bidHistory + autoBids đều lưu, hoặc không lưu gì cả.
+ *
+ * <p><b>VẤN ĐỀ FIELD PRIVATE/FINAL TRONG AUCTION:</b>
+ * Auction có nhiều field {@code private} không có public setter (currentHighestBid,
+ * totalBids...). Khi load từ DB, ta phải dùng reflection để gán giá trị → xem
+ * {@link #setAuctionField(Auction, String, Object)}.
+ *
+ * <p><b>SQLite FILE LOCK:</b> SQLite tự nhất quán giữa nhiều JVM thông qua
+ * file lock - không cần custom merge như phiên file-serialization cũ.
  */
 public class AuctionDaoImpl implements GenericDao<Auction> {
 
@@ -35,7 +48,9 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         this.db = DatabaseManager.getInstance();
     }
 
-    // ---------- CRUD ----------
+    // ========================================================================
+    // CRUD OPERATIONS
+    // ========================================================================
 
     @Override
     public void save(Auction a) {
@@ -47,6 +62,18 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         upsertWithChildren(a);
     }
 
+    /**
+     * Lưu Auction kèm các collection con (bidHistory, autoBids) - tất cả trong 1 transaction.
+     *
+     * <p><b>Cấu trúc transaction:</b>
+     * <ol>
+     *   <li>Bắt đầu: setAutoCommit(false)</li>
+     *   <li>UPSERT bảng auctions</li>
+     *   <li>DELETE + INSERT bảng bid_transactions</li>
+     *   <li>DELETE + INSERT bảng auto_bid_configs</li>
+     *   <li>Nếu tất cả OK → commit; nếu có lỗi → rollback</li>
+     * </ol>
+     */
     private void upsertWithChildren(Auction a) {
         String sql = """
             INSERT INTO auctions
@@ -74,8 +101,10 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
             """;
 
         try (Connection conn = db.getConnection()) {
+            // Bắt đầu transaction
             conn.setAutoCommit(false);
             try {
+                // ===== Bước 1: UPSERT bảng auctions =====
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
                     ps.setString(1, a.getId());
                     ps.setString(2, a.getItemId());
@@ -85,6 +114,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
                     ps.setDouble(6, a.getCurrentHighestBid());
                     ps.setString(7, a.getCurrentHighestBidderId());
                     ps.setString(8, a.getCurrentHighestBidderName());
+                    // LocalDateTime có thể null → check trước khi toString()
                     ps.setString(9, a.getStartTime() == null ? null : a.getStartTime().toString());
                     ps.setString(10, a.getEndTime() == null ? null : a.getEndTime().toString());
                     ps.setString(11, a.getStatus().name());
@@ -96,10 +126,15 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
                     ps.executeUpdate();
                 }
 
+                // ===== Bước 2: Replace bidHistory =====
                 replaceBidHistoryRows(conn, a);
+                // ===== Bước 3: Replace autoBids =====
                 replaceAutoBidRows(conn, a);
+
+                // Tất cả OK → commit
                 conn.commit();
             } catch (SQLException ex) {
+                // Có lỗi → rollback toàn bộ
                 conn.rollback();
                 throw ex;
             }
@@ -108,6 +143,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         }
     }
 
+    /** Tìm Auction theo id - kèm load các collection con. */
     @Override
     public Optional<Auction> findById(String id) {
         String sql = "SELECT * FROM auctions WHERE id = ?";
@@ -117,7 +153,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return Optional.empty();
                 Auction a = mapRow(rs);
-                loadChildren(conn, a);
+                loadChildren(conn, a); // load bidHistory + autoBids
                 return Optional.of(a);
             }
         } catch (SQLException e) {
@@ -125,6 +161,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         }
     }
 
+    /** Lấy tất cả Auction - kèm load collection cho mỗi auction. */
     @Override
     public List<Auction> findAll() {
         List<Auction> result = new ArrayList<>();
@@ -142,6 +179,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         }
     }
 
+    /** Xóa Auction. ON DELETE CASCADE sẽ tự xóa bảng phụ. */
     @Override
     public void delete(String id) {
         try (Connection conn = db.getConnection();
@@ -154,22 +192,30 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
     }
 
     /**
-     * Tương thích với API cũ (file-serialization). SQLite tự nhất quán giữa
-     * nhiều JVM thông qua file lock + transaction; mỗi lần findById/findAll
-     * đã là một fresh read nên không cần làm gì thêm.
+     * No-op - chỉ để tương thích với API cũ (file-serialization phiên trước).
+     * SQLite read luôn nhìn thấy commit mới nhất nhờ file lock, nên không cần
+     * reload thủ công.
      */
     public void reloadFromFile() {
-        // no-op: SQLite read luôn nhìn thấy commit mới nhất
+        // no-op
     }
 
-    // ---------- Children ----------
+    // ========================================================================
+    // CHILD TABLES - bid_transactions và auto_bid_configs
+    // ========================================================================
 
+    /**
+     * Replace bidHistory: xóa hết → insert lại (batch).
+     * Cùng trong transaction với UPSERT auctions → atomicity được đảm bảo.
+     */
     private void replaceBidHistoryRows(Connection conn, Auction a) throws SQLException {
+        // Xóa tất cả bid cũ của auction này
         try (PreparedStatement del = conn.prepareStatement(
                 "DELETE FROM bid_transactions WHERE auction_id = ?")) {
             del.setString(1, a.getId());
             del.executeUpdate();
         }
+        // Insert lại từ bidHistory hiện tại
         String ins = """
             INSERT INTO bid_transactions
             (id, auction_id, bidder_id, bidder_name, bid_amount, previous_bid,
@@ -187,12 +233,13 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
                 ps.setString(7, tx.getBidTime().toString());
                 ps.setString(8, tx.getCreatedAt().toString());
                 ps.setString(9, tx.getUpdatedAt().toString());
-                ps.addBatch();
+                ps.addBatch(); // batch để tối ưu performance
             }
             ps.executeBatch();
         }
     }
 
+    /** Replace auto_bid_configs - tương tự bidHistory. */
     private void replaceAutoBidRows(Connection conn, Auction a) throws SQLException {
         try (PreparedStatement del = conn.prepareStatement(
                 "DELETE FROM auto_bid_configs WHERE auction_id = ?")) {
@@ -218,14 +265,22 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         }
     }
 
+    /**
+     * Load các bảng con (bidHistory + autoBids) vào Auction object.
+     *
+     * <p>bidHistory được sắp theo (bid_time, id) để giữ thứ tự gốc.
+     * Sau khi load, gọi recomputeLeaderFromHistory() để đảm bảo
+     * currentHighestBid khớp với bid cao nhất trong history.
+     */
     private void loadChildren(Connection conn, Auction a) throws SQLException {
-        // Bid history
+        // ===== Load bid history =====
         List<BidTransaction> txs = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT * FROM bid_transactions WHERE auction_id = ? ORDER BY bid_time, id")) {
             ps.setString(1, a.getId());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
+                    // Tạo BidTransaction với bidTime tường minh từ DB
                     BidTransaction tx = new BidTransaction(
                             rs.getString("auction_id"),
                             rs.getString("bidder_id"),
@@ -233,16 +288,19 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
                             rs.getDouble("bid_amount"),
                             rs.getDouble("previous_bid"),
                             LocalDateTime.parse(rs.getString("bid_time")));
+                    // Override id, createdAt từ DB (reflection)
                     UserDaoImpl.setEntityId(tx, rs.getString("id"));
                     UserDaoImpl.setEntityCreatedAt(tx, LocalDateTime.parse(rs.getString("created_at")));
                     txs.add(tx);
                 }
             }
         }
+        // Gán list bid mới vào auction
         a.replaceBidHistory(txs);
+        // Tính lại leader từ history (đề phòng inconsistency)
         a.recomputeLeaderFromHistory();
 
-        // Auto bids
+        // ===== Load auto-bid configs =====
         List<AutoBidConfig> autos = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT * FROM auto_bid_configs WHERE auction_id = ?")) {
@@ -254,7 +312,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
                             rs.getString("bidder_name"),
                             rs.getDouble("max_bid"),
                             rs.getDouble("increment_amt"));
-                    // override registeredAt
+                    // Override registeredAt (final field - phải dùng reflection)
                     setAutoBidRegisteredAt(c, LocalDateTime.parse(rs.getString("registered_at")));
                     autos.add(c);
                 }
@@ -263,6 +321,10 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         a.replaceAutoBids(autos);
     }
 
+    /**
+     * Helper: gán field final {@code registeredAt} của AutoBidConfig qua reflection.
+     * AutoBidConfig là immutable nên không có setter - cần hack thông qua reflection.
+     */
     private static void setAutoBidRegisteredAt(AutoBidConfig c, LocalDateTime ts) {
         try {
             Field f = AutoBidConfig.class.getDeclaredField("registeredAt");
@@ -273,9 +335,18 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         }
     }
 
-    // ---------- Mapping ----------
+    // ========================================================================
+    // MAPPING
+    // ========================================================================
 
+    /**
+     * Convert row → Auction object.
+     *
+     * <p>Phải dùng reflection vì Auction có nhiều field private không có setter
+     * (currentHighestBid, totalBids, snipeExtensionCount...).
+     */
     private Auction mapRow(ResultSet rs) throws SQLException {
+        // Tạo Auction với các tham số constructor
         Auction a = new Auction(
                 rs.getString("item_id"),
                 rs.getString("seller_id"),
@@ -286,7 +357,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         a.setStatus(AuctionStatus.valueOf(rs.getString("status")));
         a.setAntiSnipingEnabled(rs.getInt("anti_sniping_enabled") == 1);
 
-        // Override id, createdAt, các field private không có setter
+        // Override id, createdAt + các field private không có setter
         UserDaoImpl.setEntityId(a, rs.getString("id"));
         UserDaoImpl.setEntityCreatedAt(a, LocalDateTime.parse(rs.getString("created_at")));
         setAuctionField(a, "currentHighestBid", rs.getDouble("current_highest_bid"));
@@ -297,6 +368,7 @@ public class AuctionDaoImpl implements GenericDao<Auction> {
         return a;
     }
 
+    /** Helper reflection: set field private của Auction. */
     private static void setAuctionField(Auction a, String field, Object value) {
         try {
             Field f = Auction.class.getDeclaredField(field);

@@ -1,6 +1,6 @@
 package com.auction.network.message;
 
-public class Response<T> extends Message {
+public class Response<T > extends Message {
   private static final long serialVersionUID = 1L;
 
   private final String id;            // Trùng với ID của Request gửi lên
@@ -9,6 +9,7 @@ public class Response<T> extends Message {
   private final T body;               // Dữ liệu trả về (User, Auction, List,...)
 
   public Response(String requestId, T body) {
+    this.id = requestId;
     this.success = true;
     this.errorMessage = null;
     this.body = body;
@@ -25,5 +26,8 @@ public class Response<T> extends Message {
   public String getId() { return id; }
   public boolean isSuccess() { return success; }
   public String getErrorMessage() { return errorMessage; }
-  public T getBody() { return body; }
+  @SuppressWarnings("unchecked")
+  public <T> T body() {
+    return (T) body;
+  }
 }
