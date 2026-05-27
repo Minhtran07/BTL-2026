@@ -1,6 +1,6 @@
 package com.auction.network.handler;
 
-import com.auction.network.Message;
+import com.auction.network.message.Message;
 import com.auction.model.user.User;
 
 /**
