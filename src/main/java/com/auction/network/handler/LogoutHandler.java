@@ -2,6 +2,7 @@ package com.auction.network.handler;
 
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 
 /**
  * ============================================================================
@@ -23,7 +24,7 @@ public class LogoutHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("message", "Đã đăng xuất");
         return response;
     }

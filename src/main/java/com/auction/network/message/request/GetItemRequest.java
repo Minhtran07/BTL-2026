@@ -1,0 +1,17 @@
+package com.auction.network.message.request;
+
+import com.auction.network.message.Request;
+
+public class GetItemRequest extends Request {
+    private static final long serialVersionUID = 1L;
+
+    private final String itemId;
+
+    public GetItemRequest(String itemId) {
+        super(Type.GET_ITEM);
+        this.itemId = itemId;
+        put("itemId", itemId);
+    }
+
+    public String getItemId() { return itemId; }
+}

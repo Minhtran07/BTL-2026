@@ -218,18 +218,19 @@ public class AuctionClient {
         // Kiểm tra kiểu (pattern matching for instanceof - Java 16+)
         if (!(obj instanceof Message message)) continue;
 
-        Message.Type type = message.getType();
-        // ===== PHÂN LOẠI MESSAGE =====
-        if (type == Message.Type.AUCTION_EVENT || type == Message.Type.BID_UPDATE) {
-          // Push event → forward cho pushHandler xử lý
+        // Đa hình: phân loại bằng instanceof thay vì switch trên enum
+        if (message instanceof com.auction.network.message.push.BidUpdatePush
+                || message instanceof com.auction.network.message.push.AuctionEventPush) {
+          pushHandler.accept(message);
+        } else if (message.getType() == Message.Type.BID_UPDATE
+                || message.getType() == Message.Type.AUCTION_EVENT) {
+          // Backward compat: server cũ gửi Message thường
           pushHandler.accept(message);
         } else {
-          // Response của 1 request đang chờ
           if (pendingResponse != null) {
               pendingResponse.complete(message);
           } else {
-            // Bất thường: nhận response mà không có request đang chờ
-            System.err.println("[Client] Nhận phản hồi nhưng không có request đang chờ: " + type);
+            System.err.println("[Client] Nhận phản hồi nhưng không có request đang chờ: " + message.getType());
           }
         }
 

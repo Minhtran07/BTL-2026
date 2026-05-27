@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.exception.InvalidBidException;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 /**
@@ -40,7 +41,7 @@ public class RegisterAutoBidHandler implements RequestHandler {
                     Double.parseDouble(request.get("maxBid")),
                     Double.parseDouble(request.get("increment")));
 
-            Message response = new Message(Message.Type.SUCCESS);
+            Response response = Response.success();
             response.put("message", "Auto-Bid đã kích hoạt");
             return response;
         } catch (InvalidBidException e) {

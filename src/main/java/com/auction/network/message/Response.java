@@ -1,33 +1,41 @@
 package com.auction.network.message;
 
-public class Response<T > extends Message {
-  private static final long serialVersionUID = 1L;
+import java.io.Serializable;
 
-  private final String id;            // Trùng với ID của Request gửi lên
-  private final boolean success;      // Xử lý thành công hay thất bại
-  private final String errorMessage; // Thông báo lỗi nếu thất bại
-  private final T body;               // Dữ liệu trả về (User, Auction, List,...)
+/**
+ * Response trả về từ server cho client.
+ * Hai factory method {@link #success} và {@link #error} thay cho constructor
+ * trực tiếp — đảm bảo không quên set type.
+ */
+public class Response extends Message {
 
-  public Response(String requestId, T body) {
-    this.id = requestId;
-    this.success = true;
-    this.errorMessage = null;
-    this.body = body;
-  }
+    private static final long serialVersionUID = 3L;
 
-  public Response(String requestId, String errorMessage) {
-    this.id = requestId;
-    this.success = false;
-    this.errorMessage = errorMessage;
-    this.body = null;
-  }
+    private final boolean success;
+    private final String errorMessage;
 
-  @Override
-  public String getId() { return id; }
-  public boolean isSuccess() { return success; }
-  public String getErrorMessage() { return errorMessage; }
-  @SuppressWarnings("unchecked")
-  public <T> T body() {
-    return (T) body;
-  }
+    private Response(Type type, boolean success, String errorMessage) {
+        super(type);
+        this.success = success;
+        this.errorMessage = errorMessage;
+    }
+
+    public static Response success() {
+        return new Response(Type.SUCCESS, true, null);
+    }
+
+    public static Response success(Serializable body) {
+        Response r = new Response(Type.SUCCESS, true, null);
+        r.setBody(body);
+        return r;
+    }
+
+    public static Response error(String message) {
+        Response r = new Response(Type.ERROR, false, message);
+        r.put("error", message);
+        return r;
+    }
+
+    public boolean isSuccess() { return success; }
+    public String getErrorMessage() { return errorMessage; }
 }

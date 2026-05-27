@@ -4,6 +4,7 @@ import com.auction.exception.AuthenticationException;
 import com.auction.model.user.User;
 import com.auction.model.user.UserRole;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.UserService;
 
 /**
@@ -31,7 +32,7 @@ public class DeactivateUserHandler implements RequestHandler {
 
         try {
             userService.deactivateUser(request.get("userId"));
-            Message response = new Message(Message.Type.SUCCESS);
+            Response response = Response.success();
             response.put("message", "Đã khóa tài khoản");
             return response;
         } catch (AuthenticationException e) {

@@ -4,6 +4,7 @@ import com.auction.model.item.Item;
 import com.auction.model.item.ItemCategory;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 import java.util.HashMap;
@@ -65,7 +66,7 @@ public class CreateItemHandler implements RequestHandler {
                 extra);
 
         // Trả về itemId mới
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("itemId", item.getId());
         return response;
     }

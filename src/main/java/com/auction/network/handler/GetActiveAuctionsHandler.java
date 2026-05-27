@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.model.auction.Auction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.service.AuctionService;
 
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ public class GetActiveAuctionsHandler implements RequestHandler {
     @Override
     public Message handle(Message request, User authenticatedUser) {
         List<Auction> auctions = new ArrayList<>(auctionService.getActiveAuctions());
-        Message response = new Message(Message.Type.SUCCESS);
+        Response response = Response.success();
         response.put("count", String.valueOf(auctions.size()));
         response.setBody((java.io.Serializable) auctions);
         return response;
