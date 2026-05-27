@@ -23,116 +23,119 @@
     </top>
 
     <center>
-        <HBox spacing="20">
-            <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
+        <ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED"
+                    style="-fx-background-color: transparent; -fx-background: transparent;">
+            <HBox spacing="20">
+                <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
 
-            <!-- Left: Product Info + Bid History Chart -->
-            <VBox spacing="16" HBox.hgrow="ALWAYS" prefWidth="600">
+                <!-- Left: Product Info + Bid History Chart -->
+                <VBox spacing="16" HBox.hgrow="ALWAYS" prefWidth="600">
 
-                <!-- Product Card -->
-                <VBox styleClass="card" spacing="12">
-                    <Label fx:id="itemNameLabel" styleClass="section-title"/>
-                    <Label fx:id="categoryLabel" styleClass="subtitle-label"/>
-                    <Separator/>
-                    <Label fx:id="descriptionLabel" wrapText="true"/>
-                    <HBox spacing="20">
-                        <VBox spacing="4">
-                            <Label text="Giá khởi điểm" styleClass="subtitle-label"/>
-                            <Label fx:id="startPriceLabel" styleClass="price-small"/>
-                        </VBox>
-                        <VBox spacing="4">
-                            <Label text="Người bán" styleClass="subtitle-label"/>
-                            <Label fx:id="sellerLabel"/>
-                        </VBox>
-                    </HBox>
-                </VBox>
-
-                <!-- Price Chart (Bid History Visualization) -->
-                <VBox styleClass="card" spacing="8" VBox.vgrow="ALWAYS">
-                    <Label text="Biểu đồ giá theo thời gian" styleClass="section-title"/>
-                    <LineChart fx:id="priceChart" VBox.vgrow="ALWAYS"
-                               animated="false" createSymbols="true" legendVisible="false">
-                        <xAxis><CategoryAxis fx:id="xAxis" label="Thời gian"/></xAxis>
-                        <yAxis><NumberAxis fx:id="yAxis" label="Giá (VNĐ)" autoRanging="true"/></yAxis>
-                    </LineChart>
-                </VBox>
-            </VBox>
-
-            <!-- Right: Bidding Panel + Bid History -->
-            <VBox spacing="16" prefWidth="380" minWidth="360">
-
-                <!-- Bidding Panel -->
-                <VBox styleClass="card" spacing="14">
-                    <!-- Status -->
-                    <HBox alignment="CENTER_LEFT" spacing="12">
-                        <Label fx:id="statusLabel" styleClass="status-running"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <VBox alignment="CENTER_RIGHT">
-                            <Label text="Thời gian còn lại" style="-fx-font-size: 11px; -fx-text-fill: #888;"/>
-                            <Label fx:id="timerLabel" styleClass="timer-label"/>
-                        </VBox>
-                    </HBox>
-
-                    <Separator/>
-
-                    <!-- Current Price -->
-                    <VBox alignment="CENTER" spacing="4">
-                        <Label text="Giá hiện tại" styleClass="subtitle-label"/>
-                        <Label fx:id="currentPriceLabel" styleClass="price-label"/>
-                        <Label fx:id="highestBidderLabel" style="-fx-text-fill: #27ae60; -fx-font-size: 13px;"/>
+                    <!-- Product Card -->
+                    <VBox styleClass="card" spacing="12">
+                        <Label fx:id="itemNameLabel" styleClass="section-title"/>
+                        <Label fx:id="categoryLabel" styleClass="subtitle-label"/>
+                        <Separator/>
+                        <Label fx:id="descriptionLabel" wrapText="true"/>
+                        <HBox spacing="20">
+                            <VBox spacing="4">
+                                <Label text="Giá khởi điểm" styleClass="subtitle-label"/>
+                                <Label fx:id="startPriceLabel" styleClass="price-small"/>
+                            </VBox>
+                            <VBox spacing="4">
+                                <Label text="Người bán" styleClass="subtitle-label"/>
+                                <Label fx:id="sellerLabel"/>
+                            </VBox>
+                        </HBox>
                     </VBox>
 
-                    <Separator/>
-
-                    <!-- Bid Input -->
-                    <VBox spacing="8">
-                        <Label text="Đặt giá của bạn"/>
-                        <TextField fx:id="bidAmountField" promptText="Nhập số tiền..."
-                                   style="-fx-font-size: 16px;"/>
-                        <Button fx:id="btnPlaceBid" text="ĐẶT GIÁ" onAction="#handlePlaceBid"
-                                styleClass="btn-bid" maxWidth="Infinity"/>
-                        <Label fx:id="bidErrorLabel" styleClass="error-label" visible="false" managed="false"/>
-                        <Label fx:id="bidSuccessLabel" styleClass="success-label" visible="false" managed="false"/>
+                    <!-- Price Chart (Bid History Visualization) -->
+                    <VBox styleClass="card" spacing="8" VBox.vgrow="ALWAYS">
+                        <Label text="Biểu đồ giá theo thời gian" styleClass="section-title"/>
+                        <LineChart fx:id="priceChart" VBox.vgrow="ALWAYS"
+                                   animated="false" createSymbols="true" legendVisible="false">
+                            <xAxis><CategoryAxis fx:id="xAxis" label="Thời gian"/></xAxis>
+                            <yAxis><NumberAxis fx:id="yAxis" label="Giá (VNĐ)" autoRanging="true"/></yAxis>
+                        </LineChart>
                     </VBox>
+                </VBox>
 
-                    <Separator/>
+                <!-- Right: Bidding Panel + Bid History -->
+                <VBox spacing="16" prefWidth="380" minWidth="360">
 
-                    <!-- Auto-Bid -->
-                    <TitledPane text="Đấu giá tự động (Auto-Bid)" expanded="false" animated="true">
+                    <!-- Bidding Panel -->
+                    <VBox styleClass="card" spacing="14">
+                        <!-- Status -->
+                        <HBox alignment="CENTER_LEFT" spacing="12">
+                            <Label fx:id="statusLabel" styleClass="status-running"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <VBox alignment="CENTER_RIGHT">
+                                <Label text="Thời gian còn lại" style="-fx-font-size: 11px; -fx-text-fill: #888;"/>
+                                <Label fx:id="timerLabel" styleClass="timer-label"/>
+                            </VBox>
+                        </HBox>
+
+                        <Separator/>
+
+                        <!-- Current Price -->
+                        <VBox alignment="CENTER" spacing="4">
+                            <Label text="Giá hiện tại" styleClass="subtitle-label"/>
+                            <Label fx:id="currentPriceLabel" styleClass="price-label"/>
+                            <Label fx:id="highestBidderLabel" style="-fx-text-fill: #27ae60; -fx-font-size: 13px;"/>
+                        </VBox>
+
+                        <Separator/>
+
+                        <!-- Bid Input -->
                         <VBox spacing="8">
-                            <padding><Insets top="8" right="4" bottom="4" left="4"/></padding>
-                            <VBox spacing="4">
-                                <Label text="Giá tối đa"/>
-                                <TextField fx:id="maxBidField" promptText="Giá tối đa bạn sẵn sàng trả"/>
-                            </VBox>
-                            <VBox spacing="4">
-                                <Label text="Bước giá"/>
-                                <TextField fx:id="incrementField" promptText="Mỗi lần tăng bao nhiêu"/>
-                            </VBox>
-                            <Button text="Bật Auto-Bid" onAction="#handleAutoBid"
-                                    styleClass="btn-primary" maxWidth="Infinity"/>
+                            <Label text="Đặt giá của bạn"/>
+                            <TextField fx:id="bidAmountField" promptText="Nhập số tiền..."
+                                       style="-fx-font-size: 16px;"/>
+                            <Button fx:id="btnPlaceBid" text="ĐẶT GIÁ" onAction="#handlePlaceBid"
+                                    styleClass="btn-bid" maxWidth="Infinity"/>
+                            <Label fx:id="bidErrorLabel" styleClass="error-label" visible="false" managed="false"/>
+                            <Label fx:id="bidSuccessLabel" styleClass="success-label" visible="false" managed="false"/>
                         </VBox>
-                    </TitledPane>
 
-                    <!-- Auction info -->
-                    <HBox spacing="16">
-                        <VBox spacing="2">
-                            <Label text="Tổng lượt đặt" style="-fx-text-fill: #888; -fx-font-size: 11px;"/>
-                            <Label fx:id="totalBidsLabel" style="-fx-font-weight: bold;"/>
-                        </VBox>
-                        <VBox spacing="2">
-                            <Label text="Anti-sniping" style="-fx-text-fill: #888; -fx-font-size: 11px;"/>
-                            <Label fx:id="antiSnipeLabel"/>
-                        </VBox>
-                    </HBox>
-                </VBox>
+                        <Separator/>
 
-                <!-- Bid History -->
-                <VBox styleClass="card" spacing="8" VBox.vgrow="ALWAYS">
-                    <Label text="Lịch sử đặt giá" styleClass="section-title"/>
-                    <ListView fx:id="bidHistoryList" VBox.vgrow="ALWAYS"/>
+                        <!-- Auto-Bid -->
+                        <TitledPane text="Đấu giá tự động (Auto-Bid)" expanded="false" animated="true">
+                            <VBox spacing="8">
+                                <padding><Insets top="8" right="4" bottom="4" left="4"/></padding>
+                                <VBox spacing="4">
+                                    <Label text="Giá tối đa"/>
+                                    <TextField fx:id="maxBidField" promptText="Giá tối đa bạn sẵn sàng trả"/>
+                                </VBox>
+                                <VBox spacing="4">
+                                    <Label text="Bước giá"/>
+                                    <TextField fx:id="incrementField" promptText="Mỗi lần tăng bao nhiêu"/>
+                                </VBox>
+                                <Button text="Bật Auto-Bid" onAction="#handleAutoBid"
+                                        styleClass="btn-primary" maxWidth="Infinity"/>
+                            </VBox>
+                        </TitledPane>
+
+                        <!-- Auction info -->
+                        <HBox spacing="16">
+                            <VBox spacing="2">
+                                <Label text="Tổng lượt đặt" style="-fx-text-fill: #888; -fx-font-size: 11px;"/>
+                                <Label fx:id="totalBidsLabel" style="-fx-font-weight: bold;"/>
+                            </VBox>
+                            <VBox spacing="2">
+                                <Label text="Anti-sniping" style="-fx-text-fill: #888; -fx-font-size: 11px;"/>
+                                <Label fx:id="antiSnipeLabel"/>
+                            </VBox>
+                        </HBox>
+                    </VBox>
+
+                    <!-- Bid History -->
+                    <VBox styleClass="card" spacing="8" VBox.vgrow="ALWAYS">
+                        <Label text="Lịch sử đặt giá" styleClass="section-title"/>
+                        <ListView fx:id="bidHistoryList" VBox.vgrow="ALWAYS"/>
+                    </VBox>
                 </VBox>
-            </VBox>
-        </HBox>
+            </HBox>
+        </ScrollPane>
     </center>
 </BorderPane>
