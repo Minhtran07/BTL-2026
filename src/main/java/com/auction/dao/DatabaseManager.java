@@ -9,29 +9,64 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Quản lý kết nối SQLite (singleton).
+ * ============================================================================
+ * DATABASEMANAGER - QUẢN LÝ KẾT NỐI SQLITE (SINGLETON)
+ * ============================================================================
  *
- * <p>Mỗi lần gọi {@link #getConnection()} sẽ trả về một {@link Connection}
- * mới — driver SQLite-JDBC dùng file lock cấp file system nên kết nối ngắn
- * và độc lập là an toàn. Caller có trách nhiệm đóng connection (nên dùng
- * try-with-resources).
+ * <p>Lớp này dùng để:
+ * <ol>
+ *   <li>Cung cấp kết nối tới SQLite database</li>
+ *   <li>Khởi tạo schema (tạo các bảng) lần đầu chạy</li>
+ *   <li>Áp dụng <b>Singleton Pattern</b> - đảm bảo chỉ có 1 instance</li>
+ * </ol>
  *
- * <p>Schema được tạo lazily ở constructor. PRAGMA {@code foreign_keys=ON}
- * cần đặt cho từng connection vì SQLite không bật mặc định.
+ * <p><b>Tại sao dùng SQLite mà không phải MySQL/PostgreSQL?</b>
+ * <ul>
+ *   <li>Nhẹ, không cần cài server riêng</li>
+ *   <li>Toàn bộ DB nằm trong 1 file (data/auction.db) - dễ backup, xóa</li>
+ *   <li>Phù hợp cho bài tập / demo - không cần triển khai phức tạp</li>
+ * </ul>
+ *
+ * <p><b>Lưu ý quan trọng về connection:</b>
+ * Mỗi lần gọi {@link #getConnection()} sẽ trả về một Connection MỚI. SQLite
+ * dùng file lock nên kết nối ngắn (mở-dùng-đóng) là an toàn. Caller phải
+ * đóng connection bằng try-with-resources.
+ *
+ * <p><b>PRAGMA foreign_keys = ON:</b> SQLite mặc định TẮT foreign key check.
+ * Phải bật cho từng connection bằng PRAGMA này → ON DELETE CASCADE mới hoạt động.
+ *
+ * <p><b>final class:</b> không cho phép kế thừa - chống user tự viết subclass
+ * phá vỡ Singleton.
  */
 public final class DatabaseManager {
 
-    /** File DB nằm cùng thư mục với app — dễ backup/xoá khi dev. */
+    /** Đường dẫn file DB. "data/" là thư mục con tự tạo nếu chưa có. */
     private static final String DB_FILE = "data/auction.db";
+
+    /** JDBC URL chuẩn cho SQLite. */
     private static final String DB_URL = "jdbc:sqlite:" + DB_FILE;
 
+    /**
+     * Instance Singleton.
+     *
+     * <p><b>volatile:</b> đảm bảo các thread nhìn thấy giá trị mới nhất.
+     * Không có volatile → có thể xảy ra trường hợp 1 thread tạo xong instance
+     * nhưng thread khác vẫn thấy null (do cache CPU).
+     */
     private static volatile DatabaseManager instance;
 
+    /**
+     * Constructor PRIVATE (đặc trưng Singleton).
+     * Tự động tạo thư mục data/ và khởi tạo schema khi instance đầu tiên được tạo.
+     */
     private DatabaseManager() {
-        ensureDataDir();
-        initSchema();
+        ensureDataDir();  // Tạo thư mục data/ nếu chưa có
+        initSchema();     // Tạo các bảng nếu chưa có
     }
 
+    /**
+     * Lấy instance Singleton - dùng Double-Checked Locking.
+     */
     public static DatabaseManager getInstance() {
         if (instance == null) {
             synchronized (DatabaseManager.class) {
@@ -44,31 +79,74 @@ public final class DatabaseManager {
     }
 
     /**
-     * Mở connection mới. Caller phải đóng (try-with-resources).
+     * Mở connection mới tới SQLite.
+     *
+     * <p>Caller PHẢI đóng connection sau khi dùng - khuyến nghị dùng
+     * try-with-resources:
+     * <pre>
+     * try (Connection conn = dbm.getConnection()) {
+     *     // dùng conn
+     * } // tự động close ở đây
+     * </pre>
+     *
+     * @return Connection mới, đã bật foreign_keys
+     * @throws DataAccessException nếu không kết nối được
      */
     public Connection getConnection() {
         try {
+            // Mở connection - SQLite tự tạo file nếu chưa có
             Connection conn = DriverManager.getConnection(DB_URL);
+            // Bật foreign key check cho connection này
             try (Statement st = conn.createStatement()) {
                 st.execute("PRAGMA foreign_keys = ON");
             }
             return conn;
         } catch (SQLException e) {
+            // Bọc SQLException thành DataAccessException (unchecked) để
+            // service không cần khai báo throws SQLException
             throw new DataAccessException("Không kết nối được SQLite: " + DB_URL, e);
         }
     }
 
+    /**
+     * Đảm bảo thư mục data/ tồn tại.
+     * Nếu mkdirs() thất bại → in cảnh báo nhưng không ném exception
+     * (để DriverManager báo lỗi nếu thực sự không tạo được file).
+     */
     private void ensureDataDir() {
         File dir = new File("data");
         if (!dir.exists() && !dir.mkdirs()) {
-            // không fatal, để DriverManager báo lỗi nếu thực sự không tạo được file
             System.err.println("Cảnh báo: không tạo được thư mục data/");
         }
     }
 
+    /**
+     * Khởi tạo các bảng trong database (lần đầu chạy).
+     *
+     * <p>Dùng "CREATE TABLE IF NOT EXISTS" → an toàn khi chạy nhiều lần.
+     * Nếu bảng đã có sẵn → bỏ qua, không lỗi.
+     *
+     * <p><b>Cấu trúc các bảng:</b>
+     * <ul>
+     *   <li><b>users</b>: lưu mọi User (Bidder/Seller/Admin) dùng single-table
+     *       inheritance - phân biệt qua cột {@code role}</li>
+     *   <li><b>bidder_won_auctions</b>: lưu các phiên Bidder thắng (many-to-many)</li>
+     *   <li><b>bidder_participating_auctions</b>: phiên Bidder đang tham gia</li>
+     *   <li><b>seller_listed_items</b>: item Seller đang đăng</li>
+     *   <li><b>items</b>: Electronics/Art/Vehicle (single-table inheritance qua category)</li>
+     *   <li><b>auctions</b>: phiên đấu giá</li>
+     *   <li><b>bid_transactions</b>: lịch sử bid</li>
+     *   <li><b>auto_bid_configs</b>: cấu hình auto-bid</li>
+     * </ul>
+     *
+     * <p><b>Single-table inheritance:</b> tất cả các loại User được lưu chung
+     * 1 bảng `users` (với cột role); tương tự với items. Trade-off: nhiều cột
+     * null nhưng query đơn giản, không cần JOIN.
+     */
     private void initSchema() {
         try (Connection conn = getConnection(); Statement st = conn.createStatement()) {
-            // ===== Users (single-table inheritance: BIDDER / SELLER / ADMIN) =====
+
+            // ===== BẢNG USERS (chứa cả Bidder/Seller/Admin) =====
             st.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id              TEXT PRIMARY KEY,
@@ -78,16 +156,16 @@ public final class DatabaseManager {
                     full_name       TEXT,
                     role            TEXT NOT NULL,
                     active          INTEGER NOT NULL DEFAULT 1,
-                    -- Bidder-only
+                    -- Các cột chỉ có ý nghĩa với Bidder
                     balance         REAL DEFAULT 0,
-                    -- Seller-only
+                    -- Các cột chỉ có ý nghĩa với Seller
                     total_revenue   REAL DEFAULT 0,
                     created_at      TEXT NOT NULL,
                     updated_at      TEXT NOT NULL
                 )
                 """);
 
-            // Bidder.wonAuctionIds (List<String>)
+            // ===== BẢNG QUAN HỆ: Bidder ↔ Auction đã thắng =====
             st.execute("""
                 CREATE TABLE IF NOT EXISTS bidder_won_auctions (
                     bidder_id   TEXT NOT NULL,
@@ -97,7 +175,7 @@ public final class DatabaseManager {
                 )
                 """);
 
-            // Bidder.participatingAuctionIds
+            // ===== BẢNG QUAN HỆ: Bidder ↔ Auction đang tham gia =====
             st.execute("""
                 CREATE TABLE IF NOT EXISTS bidder_participating_auctions (
                     bidder_id   TEXT NOT NULL,
@@ -107,7 +185,7 @@ public final class DatabaseManager {
                 )
                 """);
 
-            // Seller.listedItemIds
+            // ===== BẢNG QUAN HỆ: Seller ↔ Item đã đăng =====
             st.execute("""
                 CREATE TABLE IF NOT EXISTS seller_listed_items (
                     seller_id   TEXT NOT NULL,
@@ -117,7 +195,8 @@ public final class DatabaseManager {
                 )
                 """);
 
-            // ===== Items (single-table inheritance) =====
+            // ===== BẢNG ITEMS (chứa cả Electronics/Art/Vehicle) =====
+            // Single-table inheritance: phân biệt qua cột `category`
             st.execute("""
                 CREATE TABLE IF NOT EXISTS items (
                     id              TEXT PRIMARY KEY,
@@ -127,15 +206,15 @@ public final class DatabaseManager {
                     starting_price  REAL NOT NULL,
                     seller_id       TEXT NOT NULL,
                     image_url       TEXT,
-                    -- Electronics
+                    -- Cột riêng cho Electronics
                     brand           TEXT,
                     model           TEXT,
                     condition_      TEXT,
-                    -- Art
+                    -- Cột riêng cho Art
                     artist          TEXT,
                     art_year        INTEGER,
                     medium          TEXT,
-                    -- Vehicle
+                    -- Cột riêng cho Vehicle
                     make            TEXT,
                     vehicle_model   TEXT,
                     vehicle_year    INTEGER,
@@ -146,7 +225,7 @@ public final class DatabaseManager {
                 )
                 """);
 
-            // ===== Auctions =====
+            // ===== BẢNG AUCTIONS - phiên đấu giá =====
             st.execute("""
                 CREATE TABLE IF NOT EXISTS auctions (
                     id                          TEXT PRIMARY KEY,
@@ -170,7 +249,7 @@ public final class DatabaseManager {
                 )
                 """);
 
-            // Bid transactions
+            // ===== BẢNG BID_TRANSACTIONS - lịch sử các lượt bid =====
             st.execute("""
                 CREATE TABLE IF NOT EXISTS bid_transactions (
                     id            TEXT PRIMARY KEY,
@@ -185,9 +264,11 @@ public final class DatabaseManager {
                     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE
                 )
                 """);
+            // Index để query lịch sử bid theo auction nhanh hơn
             st.execute("CREATE INDEX IF NOT EXISTS idx_bidtx_auction ON bid_transactions(auction_id, bid_time)");
 
-            // Auto-bid configs (key composite: auction_id + bidder_id)
+            // ===== BẢNG AUTO_BID_CONFIGS - cấu hình auto-bid =====
+            // PRIMARY KEY (auction_id, bidder_id) → mỗi bidder chỉ 1 config / auction
             st.execute("""
                 CREATE TABLE IF NOT EXISTS auto_bid_configs (
                     auction_id      TEXT NOT NULL,

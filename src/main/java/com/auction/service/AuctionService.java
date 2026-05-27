@@ -118,7 +118,7 @@ public class AuctionService {
     }
 
     public Optional<Item> getItem(String itemId)   { return itemDao.findById(itemId); }
-    public List<Item>     getAllItems()             { return itemDao.findAll(); }
+    public List<Item>     getAllItems()            { return itemDao.findAll(); }
     public void           updateItem(Item item)    { itemDao.update(item); }
     public void           deleteItem(String itemId){ itemDao.delete(itemId); }
 
@@ -151,7 +151,7 @@ public class AuctionService {
         long startDelay = java.time.Duration.between(LocalDateTime.now(), startTime).toSeconds();
         if (startDelay > 0) {
             // Ta bảo Manager: "Đến giờ thì tự chạy hàm startAuctionProactively(auctionId) của tôi nhé"
-            auctionManager.scheduleAuctionStart(startDelay, auction::start);
+            auctionManager.scheduleAuctionStart(startDelay, () -> this.startAuctionProactively(auction.getId()));
         } else {
             auction.start();
             auctionDao.update(auction);
@@ -170,6 +170,28 @@ public class AuctionService {
                 "Phiên đấu giá '" + itemName + "' đã được tạo"));
 
         return auction;
+    }
+
+    public void startAuctionProactively(String auctionId) {
+        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        boolean isStarted = false;
+
+        synchronized (lock) {
+            Auction auction = auctionManager.getAuction(auctionId);
+            if (auction != null && auction.getStatus() == AuctionStatus.OPEN) {
+                auction.start();             // OPEN -> RUNNING trên RAM
+                auctionDao.update(auction);  // Lưu xuống SQLite
+                isStarted = true;
+            }
+        } // Nhả khóa phòng nhanh chóng
+
+        // Bắn event ra ngoài để đẩy qua WebSocket lên GUI realtime!
+        if (isStarted) {
+            eventDispatcher.dispatch(new AuctionEvent(
+                AuctionEvent.EventType.AUCTION_STARTED,
+                auctionId,
+                "Phiên đấu giá đã chính thức bắt đầu! Đặt giá ngay!"));
+        }
     }
 
     /**
@@ -203,14 +225,11 @@ public class AuctionService {
             if (transaction == null) {
                 throw new InvalidBidException("Không thể đặt giá. Vui lòng thử lại.");
             }
+            auctionDao.update(auction);
 
             // Xử lý auto-bidding.
             // Tối ưu: chỉ persist xuống DAO 1 lần sau khi cả burst kết thúc
-            // (processAutoBids đã giữ lock và sinh hết transaction trước khi return).
             autoBidResults = auction.processAutoBids(bidderId);
-            if (!autoBidResults.isEmpty()) {
-                auctionDao.update(auction);
-            }
         }
 
         // Thông báo qua Observer Pattern
