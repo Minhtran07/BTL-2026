@@ -225,11 +225,11 @@ public class AuctionService {
             if (transaction == null) {
                 throw new InvalidBidException("Không thể đặt giá. Vui lòng thử lại.");
             }
-            auctionDao.update(auction);
 
             // Xử lý auto-bidding.
             // Tối ưu: chỉ persist xuống DAO 1 lần sau khi cả burst kết thúc
             autoBidResults = auction.processAutoBids(bidderId);
+            auctionDao.update(auction);
         }
 
         // Thông báo qua Observer Pattern
