@@ -325,17 +325,71 @@ public class AuctionService {
         return opt;
     }
 
+    /**
+     * Lấy tất cả phiên đấu giá — DB là nguồn chính (vì cache chỉ giữ phiên active),
+     * nhưng ưu tiên object từ cache cho các phiên đang OPEN/RUNNING.
+     *
+     * <p><b>Tại sao ưu tiên cache?</b> Với phiên đang chạy, bản cache có state
+     * mới nhất (bid in-memory chưa flush xuống DB), trong khi bản DB có thể stale
+     * vài giây. Phiên đã kết thúc/huỷ thì lấy từ DB vì cache đã evict.
+     */
     public List<Auction> getAllAuctions() {
-        List<Auction> auctions = new ArrayList<>(auctionDao.findAll());
-        for (Auction a : auctions) {
+        List<Auction> fromDb = auctionDao.findAll();
+        List<Auction> result = new ArrayList<>(fromDb.size());
+        for (Auction dbAuction : fromDb) {
+            Auction cached = auctionManager.getAuction(dbAuction.getId());
+            if (cached != null) {
+                // Bản cache mới hơn cho phiên active → ưu tiên
+                result.add(cached);
+            } else {
+                result.add(dbAuction);
+                // Warm cache nếu phiên đang active mà chưa có trong cache
+                if (dbAuction.getStatus() == AuctionStatus.OPEN
+                        || dbAuction.getStatus() == AuctionStatus.RUNNING) {
+                    auctionManager.addAuction(dbAuction);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Lấy các phiên đang chạy — cache-first, warm từ DB nếu cache rỗng.
+     *
+     * <p>Trường hợp cache rỗng xảy ra khi server vừa restart — chưa có client
+     * nào trigger load. Method này tự warm cache từ DB một lần, các lần gọi
+     * tiếp theo sẽ hit cache trực tiếp (O(n) filter trên ConcurrentHashMap).
+     */
+    public List<Auction> getActiveAuctions() {
+        List<Auction> cached = auctionManager.getActiveAuctions();
+        if (!cached.isEmpty()) return cached;
+        // Cache cold → warm từ DB
+        warmCacheFromDb();
+        return auctionManager.getActiveAuctions();
+    }
+
+    /**
+     * Lấy các phiên của 1 seller — cache-first, warm từ DB nếu cache rỗng.
+     */
+    public List<Auction> getAuctionsBySeller(String sellerId) {
+        List<Auction> cached = auctionManager.getAuctionsBySeller(sellerId);
+        if (!cached.isEmpty()) return cached;
+        // Cache cold → warm từ DB rồi thử lại
+        warmCacheFromDb();
+        return auctionManager.getAuctionsBySeller(sellerId);
+    }
+
+    /**
+     * Nạp tất cả phiên OPEN/RUNNING từ DB vào cache.
+     * Gọi khi phát hiện cache rỗng (server vừa restart).
+     */
+    private void warmCacheFromDb() {
+        for (Auction a : auctionDao.findAll()) {
             if (a.getStatus() == AuctionStatus.OPEN || a.getStatus() == AuctionStatus.RUNNING) {
                 auctionManager.addAuction(a);
             }
         }
-        return auctions;
     }
-    public List<Auction> getActiveAuctions()                  { return auctionManager.getActiveAuctions(); }
-    public List<Auction> getAuctionsBySeller(String sellerId) { return auctionManager.getAuctionsBySeller(sellerId); }
 
     /**
      * Kết thúc phiên đấu giá thủ công và thực hiện thanh toán tự động.
