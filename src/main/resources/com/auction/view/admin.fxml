@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.cell.PropertyValueFactory?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.auction.controller.AdminController"
+            prefWidth="1100" prefHeight="750"
+            styleClass="root">
+
+    <top>
+        <HBox styleClass="nav-bar" alignment="CENTER_LEFT" spacing="16">
+            <Button text="← Quay lại" styleClass="nav-button" onAction="#handleBack"/>
+            <Label text="🔧 Quản trị hệ thống"
+                   style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;"/>
+        </HBox>
+    </top>
+
+    <center>
+        <ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED"
+                    style="-fx-background-color: transparent; -fx-background: transparent;">
+            <VBox spacing="20">
+                <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
+
+                <!-- Stats -->
+                <HBox spacing="16">
+                    <VBox styleClass="card" HBox.hgrow="ALWAYS" alignment="CENTER" spacing="4">
+                        <Label fx:id="totalUsersLabel" style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #2980b9;"/>
+                        <Label text="Người dùng" styleClass="subtitle-label"/>
+                    </VBox>
+                    <VBox styleClass="card" HBox.hgrow="ALWAYS" alignment="CENTER" spacing="4">
+                        <Label fx:id="totalAuctionsLabel" style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #27ae60;"/>
+                        <Label text="Phiên đấu giá" styleClass="subtitle-label"/>
+                    </VBox>
+                    <VBox styleClass="card" HBox.hgrow="ALWAYS" alignment="CENTER" spacing="4">
+                        <Label fx:id="activeAuctionsLabel" style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #e67e22;"/>
+                        <Label text="Đang diễn ra" styleClass="subtitle-label"/>
+                    </VBox>
+                </HBox>
+
+                <!-- Users Table -->
+                <VBox styleClass="card" spacing="12" VBox.vgrow="ALWAYS">
+                    <HBox alignment="CENTER_LEFT" spacing="12">
+                        <Label text="Quản lý người dùng" styleClass="section-title"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button text="Làm mới" styleClass="btn-secondary" onAction="#handleRefresh"/>
+                    </HBox>
+
+                    <TableView fx:id="usersTable" VBox.vgrow="ALWAYS">
+                        <columns>
+                            <TableColumn fx:id="colUsername" text="Tên đăng nhập" prefWidth="150"/>
+                            <TableColumn fx:id="colFullName" text="Họ tên" prefWidth="180"/>
+                            <TableColumn fx:id="colEmail" text="Email" prefWidth="200"/>
+                            <TableColumn fx:id="colRole" text="Vai trò" prefWidth="100"/>
+                            <TableColumn fx:id="colStatus" text="Trạng thái" prefWidth="100"/>
+                            <TableColumn fx:id="colAction" text="Thao tác" prefWidth="150"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+            </VBox>
+        </ScrollPane>
+    </center>
+</BorderPane>

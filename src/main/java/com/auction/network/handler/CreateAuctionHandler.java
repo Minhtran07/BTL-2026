@@ -2,7 +2,9 @@ package com.auction.network.handler;
 
 import com.auction.model.auction.Auction;
 import com.auction.model.user.User;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
+import com.auction.network.message.Response;
+import com.auction.network.message.request.CreateAuctionRequest;
 import com.auction.service.AuctionService;
 
 import java.time.LocalDateTime;
@@ -12,12 +14,8 @@ import java.time.LocalDateTime;
  * CREATEAUCTIONHANDLER - TẠO PHIÊN ĐẤU GIÁ MỚI
  * ============================================================================
  *
- * <p>Client gửi itemId + durationMinutes + startingPrice. Handler:
- * <ol>
- *   <li>Tính startTime = now, endTime = now + duration phút</li>
- *   <li>Gọi AuctionService.createAuction()</li>
- *   <li>Trả auctionId</li>
- * </ol>
+ * <p>Client gửi {@link CreateAuctionRequest} chứa itemId, itemName,
+ * startingPrice, durationMinutes. Handler tính thời gian rồi gọi service.
  *
  * <p><b>Lưu ý:</b> sellerId được lấy TỪ authenticatedUser (server tin user
  * hiện tại), không cho client tự truyền sellerId - tránh giả mạo.
@@ -33,20 +31,20 @@ public class CreateAuctionHandler implements RequestHandler {
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (authenticatedUser == null) return HandlerUtils.error("Chưa đăng nhập");
+        if (!(request instanceof CreateAuctionRequest req)) {
+            return HandlerUtils.error("Request không hợp lệ");
+        }
 
-        int durationMinutes = Integer.parseInt(request.get("duration"));
         LocalDateTime start = LocalDateTime.now();
-        LocalDateTime end   = start.plusMinutes(durationMinutes);
+        LocalDateTime end   = start.plusMinutes(req.getDurationMinutes());
 
         Auction auction = auctionService.createAuction(
-                request.get("itemId"),
+                req.getItemId(),
                 authenticatedUser.getId(),
-                request.get("itemName"),
-                Double.parseDouble(request.get("startingPrice")),
+                req.getItemName(),
+                req.getStartingPrice(),
                 start, end);
 
-        Message response = new Message(Message.Type.SUCCESS);
-        response.put("auctionId", auction.getId());
-        return response;
+        return Response.success(auction.getId());
     }
 }
