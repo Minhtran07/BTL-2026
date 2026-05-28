@@ -145,9 +145,6 @@ public class AuctionService {
             auction.start();
         }
 
-        auctionDao.save(auction);
-        auctionManager.addAuction(auction);
-
         // 1. CÀI BÁO THỨC MỞ PHÒNG bằng Lambda
         long startDelay = java.time.Duration.between(LocalDateTime.now(), startTime).toSeconds();
         if (startDelay > 0) {
@@ -164,6 +161,9 @@ public class AuctionService {
             // Ta bảo Manager: "Đến giờ thì tự gọi hàm endAuction(auctionId) của tôi"
             auctionManager.scheduleAuctionEnd(endDelay, () -> this.endAuction(auction.getId()));
         }
+
+        auctionDao.save(auction);
+        auctionManager.addAuction(auction);
 
         eventDispatcher.dispatch(new AuctionEvent(
                 AuctionEvent.EventType.AUCTION_STARTED,
