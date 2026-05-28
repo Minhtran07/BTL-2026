@@ -21,6 +21,7 @@ import com.auction.pattern.strategy.BidValidationStrategy;
 import com.auction.pattern.strategy.StandardBidValidation;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -307,10 +308,20 @@ public class AuctionService {
      * get Auction by ID from database
      */
     public Optional<Auction> getFreshAuction(String auctionId) {
-        return auctionDao.findById(auctionId);
+        Optional<Auction> opt = auctionDao.findById(auctionId);
+        opt.ifPresent(auction -> AuctionManager.getInstance().addAuction(auction)); // cache luôn
+        return opt;
     }
 
-    public List<Auction> getAllAuctions()                     { return auctionManager.getAllAuctions(); }
+    public List<Auction> getAllAuctions() {
+        List<Auction> auctions = new ArrayList<>(auctionDao.findAll());
+        for (Auction a : auctions) {
+            if (a.getStatus() == AuctionStatus.OPEN || a.getStatus() == AuctionStatus.RUNNING) {
+                auctionManager.addAuction(a);
+            }
+        }
+        return auctions;
+    }
     public List<Auction> getActiveAuctions()                  { return auctionManager.getActiveAuctions(); }
     public List<Auction> getAuctionsBySeller(String sellerId) { return auctionManager.getAuctionsBySeller(sellerId); }
 

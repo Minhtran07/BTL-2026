@@ -10,6 +10,7 @@ import com.auction.service.AuctionService;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ============================================================================
@@ -31,10 +32,6 @@ public class GetAllAuctionsHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        ArrayList<Auction> auctions = new ArrayList<>(auctionDao.findAll());
-        for (Auction a : auctions) {
-            AuctionManager.getInstance().addAuction(a);
-        }
-        return Response.success((Serializable) auctions);
+        return Response.success((Serializable) auctionService.getAllAuctions());
     }
 }

@@ -27,7 +27,6 @@ public class GetActiveAuctionsHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        ArrayList<Auction> auctions = new ArrayList<>(auctionService.getActiveAuctions());
-        return Response.success((Serializable) auctions);
+        return Response.success((Serializable) auctionService.getActiveAuctions());
     }
 }
