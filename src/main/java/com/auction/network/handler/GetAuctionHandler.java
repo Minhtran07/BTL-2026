@@ -37,9 +37,6 @@ public class GetAuctionHandler implements RequestHandler {
         Optional<Auction> opt = auctionService.getFreshAuction(req.getAuctionId());
         if (opt.isEmpty()) return HandlerUtils.error("Không tìm thấy phiên đấu giá");
 
-        Auction a = opt.get();
-        AuctionManager.getInstance().addAuction(a);
-
-        return Response.success(a);
+        return Response.success(opt.get());
     }
 }

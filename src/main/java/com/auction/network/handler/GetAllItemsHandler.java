@@ -26,7 +26,6 @@ public class GetAllItemsHandler implements RequestHandler {
 
     @Override
     public Message handle(Message request, User authenticatedUser) {
-        ArrayList<Item> items = new ArrayList<>(auctionService.getAllItems());
-        return Response.success((Serializable) items);
+        return Response.success((Serializable) auctionService.getAllItems());
     }
 }
