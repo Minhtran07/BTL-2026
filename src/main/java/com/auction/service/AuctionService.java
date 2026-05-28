@@ -297,8 +297,17 @@ public class AuctionService {
         }
     }
 
+    /**
+     * get Auction by ID from cache
+     */
     public Optional<Auction> getAuction(String auctionId) {
         return Optional.ofNullable(auctionManager.getAuction(auctionId));
+    }
+    /**
+     * get Auction by ID from database
+     */
+    public Optional<Auction> getFreshAuction(String auctionId) {
+        return auctionDao.findById(auctionId);
     }
 
     public List<Auction> getAllAuctions()                     { return auctionManager.getAllAuctions(); }

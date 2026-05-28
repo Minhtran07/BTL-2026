@@ -23,7 +23,6 @@ public class GetAuctionHandler implements RequestHandler {
 
     @SuppressWarnings("unused")
     private final AuctionService auctionService;
-    private final AuctionDaoImpl auctionDao = new AuctionDaoImpl();
 
     public GetAuctionHandler(AuctionService auctionService) {
         this.auctionService = auctionService;
@@ -35,7 +34,7 @@ public class GetAuctionHandler implements RequestHandler {
             return HandlerUtils.error("Request không hợp lệ");
         }
 
-        Optional<Auction> opt = auctionDao.findById(req.getAuctionId());
+        Optional<Auction> opt = auctionService.getFreshAuction(req.getAuctionId());
         if (opt.isEmpty()) return HandlerUtils.error("Không tìm thấy phiên đấu giá");
 
         Auction a = opt.get();
