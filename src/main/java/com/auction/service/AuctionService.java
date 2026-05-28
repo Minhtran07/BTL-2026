@@ -178,7 +178,7 @@ public class AuctionService {
         boolean isStarted = false;
 
         synchronized (lock) {
-            Auction auction = auctionManager.getAuction(auctionId);
+            Auction auction = resolveAuction(auctionId);
             if (auction != null && auction.getStatus() == AuctionStatus.OPEN) {
                 auction.start();             // OPEN -> RUNNING trên RAM
                 auctionDao.update(auction);  // Lưu xuống SQLite
@@ -207,7 +207,7 @@ public class AuctionService {
         List<BidTransaction> autoBidResults;
 
         synchronized (lock) {
-            auction = auctionManager.getAuction(auctionId);
+            auction = resolveAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá: " + auctionId);
             }
@@ -262,7 +262,7 @@ public class AuctionService {
         List<BidTransaction> autoBidResults = List.of();
 
         synchronized (lock) {
-            auction = auctionManager.getAuction(auctionId);
+            auction = resolveAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá");
             }
@@ -299,17 +299,29 @@ public class AuctionService {
     }
 
     /**
-     * get Auction by ID from cache
+     * Lấy Auction theo ID — cache-first với DB fallback.
+     *
+     * <p>Thử lấy từ AuctionManager (in-memory cache) trước. Nếu cache miss
+     * (server vừa restart, phiên chưa được load, hoặc phiên đã bị evict),
+     * tự động fallback sang DB và warm cache để lần sau không miss nữa.
+     *
+     * <p>Đây là pattern <b>Cache-Aside (Lazy Loading)</b>: chỉ load vào cache
+     * khi thực sự cần, thay vì preload toàn bộ.
      */
     public Optional<Auction> getAuction(String auctionId) {
-        return Optional.ofNullable(auctionManager.getAuction(auctionId));
+        Auction cached = auctionManager.getAuction(auctionId);
+        if (cached != null) return Optional.of(cached);
+        // Cache miss → fallback DB và warm cache
+        return getFreshAuction(auctionId);
     }
+
     /**
-     * get Auction by ID from database
+     * Lấy Auction trực tiếp từ DB (bỏ qua cache) — dùng khi cần data mới nhất
+     * (vd: client vừa mở trang chi tiết).
      */
     public Optional<Auction> getFreshAuction(String auctionId) {
         Optional<Auction> opt = auctionDao.findById(auctionId);
-        opt.ifPresent(auction -> AuctionManager.getInstance().addAuction(auction)); // cache luôn
+        opt.ifPresent(auctionManager::addAuction); // warm cache
         return opt;
     }
 
@@ -336,7 +348,7 @@ public class AuctionService {
         Auction auction;
 
         synchronized (lock) {
-            auction = auctionManager.getAuction(auctionId);
+            auction = resolveAuction(auctionId);
             if (auction == null) return;
 
             auction.finish();
@@ -403,7 +415,7 @@ public class AuctionService {
         boolean isCanceledSuccessfully = false;
 
         synchronized (lock) {
-            Auction auction = auctionManager.getAuction(auctionId);
+            Auction auction = resolveAuction(auctionId);
             if (auction != null) {
                 auction.cancel();
                 auctionDao.update(auction);
@@ -423,10 +435,31 @@ public class AuctionService {
     }
 
     /**
-     * Lấy lịch sử bid của phiên.
+     * Lấy lịch sử bid của phiên — cache-first với DB fallback.
      */
     public List<BidTransaction> getBidHistory(String auctionId) {
-        Auction auction = auctionManager.getAuction(auctionId);
+        Auction auction = resolveAuction(auctionId);
         return auction != null ? auction.getBidHistory() : List.of();
+    }
+
+    // ==================== Internal Helpers ====================
+
+    /**
+     * Lấy Auction từ cache, fallback sang DB nếu cache miss.
+     *
+     * <p>Dùng nội bộ bởi các method nghiệp vụ (placeBid, endAuction...)
+     * thay vì truy cập trực tiếp {@code auctionManager.getAuction()} —
+     * đảm bảo mọi thao tác đều xử lý được cache miss (vd: server vừa
+     * restart mà client gọi placeBid ngay trước khi cache được warm).
+     *
+     * @return Auction object hoặc null nếu không tìm thấy cả trong cache lẫn DB
+     */
+    private Auction resolveAuction(String auctionId) {
+        Auction auction = auctionManager.getAuction(auctionId);
+        if (auction != null) return auction;
+        // Cache miss → load từ DB và warm cache
+        Optional<Auction> opt = auctionDao.findById(auctionId);
+        opt.ifPresent(auctionManager::addAuction);
+        return opt.orElse(null);
     }
 }

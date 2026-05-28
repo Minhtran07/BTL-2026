@@ -244,6 +244,19 @@ public class AuctionDetailController {
         bidHistoryList.setItems(items);
     }
 
+    /**
+     * Cập nhật biểu đồ giá theo diễn biến bid.
+     *
+     * <p><b>FIX "mất toạ độ":</b> JavaFX LineChart + CategoryAxis có bug khi
+     * gọi {@code getData().clear()} rồi add series mới — CategoryAxis mất
+     * tick labels (trục X trống trơn). Nguyên nhân: auto-ranging xoá danh
+     * sách category nội bộ khi data bị clear, nhưng không tái tạo khi data
+     * mới được add vào.
+     *
+     * <p>Giải pháp: tắt auto-ranging trên xAxis, tự quản lý danh sách
+     * categories thủ công → đảm bảo trục X luôn hiển thị đầy đủ nhãn.
+     * Đồng thời xoay nhãn 45° khi có nhiều bid để tránh chồng chéo.
+     */
     private void updatePriceChart(Auction auction) {
         List<BidTransaction> history = auction.getBidHistory();
 
@@ -259,6 +272,10 @@ public class AuctionDetailController {
 
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm:ss");
 
+        // Xây danh sách categories song song với data points
+        List<String> categories = new java.util.ArrayList<>();
+
+        categories.add("Khởi điểm");
         newSeries.getData().add(new XYChart.Data<>("Khởi điểm", auction.getStartingPrice()));
 
         java.util.Map<String, Integer> seen = new java.util.HashMap<>();
@@ -266,8 +283,14 @@ public class AuctionDetailController {
             String base  = tx.getBidTime().format(fmt);
             int    count = seen.merge(base, 1, Integer::sum);
             String label = (count == 1) ? base : base + " #" + count;
+            categories.add(label);
             newSeries.getData().add(new XYChart.Data<>(label, tx.getBidAmount()));
         }
+
+        // Fix: set categories thủ công để CategoryAxis không mất tick labels
+        xAxis.setAutoRanging(false);
+        xAxis.setCategories(FXCollections.observableArrayList(categories));
+        xAxis.setTickLabelRotation(categories.size() > 6 ? -45 : 0);
 
         priceChart.getData().clear();
         priceChart.getData().add(newSeries);
