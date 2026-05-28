@@ -19,11 +19,7 @@ import java.util.stream.Collectors;
  *
  * <p>Đây là class áp dụng <b>SINGLETON PATTERN</b> - chỉ tồn tại 1 instance
  * duy nhất trong toàn JVM. Vai trò: quản lý "in-memory cache" của các phiên
- * đấu giá đang hoạt động, đồng thời chạy 1 thread định kỳ để tự động:
- * <ul>
- *   <li>Bắt đầu phiên khi tới giờ startTime (OPEN → RUNNING)</li>
- *   <li>Kết thúc phiên khi hết endTime (RUNNING → FINISHED)</li>
- * </ul>
+ * đấu giá đang hoạt động.
  *
  * <p><b>SINGLETON PATTERN LÀ GÌ?</b> Đảm bảo 1 class chỉ có 1 instance, cung
  * cấp 1 điểm truy cập toàn cục. Áp dụng khi:
@@ -38,9 +34,6 @@ import java.util.stream.Collectors;
  * HashMap thường sẽ gây ConcurrentModificationException. ConcurrentHashMap
  * an toàn cho việc đọc/ghi song song mà không cần lock toàn bộ.
  *
- * <p><b>TẠI SAO DÙNG ScheduledExecutorService?</b>
- * Để chạy task định kỳ (mỗi 1 giây kiểm tra trạng thái phiên). Tốt hơn
- * Timer/TimerTask vì hỗ trợ pool nhiều thread + xử lý exception tốt hơn.
  */
 public class AuctionManager {
 
@@ -69,8 +62,7 @@ public class AuctionManager {
      */
     private AuctionManager() {
         this.auctions = new ConcurrentHashMap<>();
-        this.scheduler = Executors.newScheduledThreadPool(2);
-        startAuctionMonitor();
+        this.scheduler = Executors.newScheduledThreadPool(8);
     }
 
     /**
@@ -95,72 +87,34 @@ public class AuctionManager {
     }
 
     /**
-     * Bắt đầu thread monitor - chạy mỗi 1 giây để check trạng thái auctions.
-     *
-     * <p><b>scheduleAtFixedRate(task, initialDelay, period, unit):</b>
-     * <ul>
-     *   <li>task: lambda chạy</li>
-     *   <li>initialDelay = 0: chạy ngay</li>
-     *   <li>period = 1: lặp lại sau mỗi 1 đơn vị</li>
-     *   <li>unit = SECONDS: đơn vị là giây</li>
-     * </ul>
-     *
-     * <p><b>Try-catch trong task:</b> bắt mọi exception để không làm chết
-     * scheduler. Nếu 1 lần check lỗi, lần sau vẫn chạy.
+     * BÁO THỨC MỞ PHÒNG
      */
-    private void startAuctionMonitor() {
-        scheduler.scheduleAtFixedRate(() -> {
+    public void scheduleAuctionStart(long delayInSeconds, Runnable targetTask) {
+        scheduler.schedule(() -> {
             try {
-                LocalDateTime now = LocalDateTime.now();
-                // Duyệt tất cả auctions trong cache
-                for (Auction auction : auctions.values()) {
-                    // Tự động START phiên khi đến giờ
-                    if (auction.getStatus() == AuctionStatus.OPEN
-                            && now.isAfter(auction.getStartTime())) {
-                        auction.start();
-                    }
-                    // Tự động FINISH phiên khi hết giờ
-                    if (auction.getStatus() == AuctionStatus.RUNNING
-                            && now.isAfter(auction.getEndTime())) {
-                        auction.finish();
-                    }
-                }
+                targetTask.run(); // Đến giờ thì kích hoạt hành động được giao
             } catch (Exception e) {
-                // Log lỗi nhưng KHÔNG ném ra ngoài (sẽ làm dừng scheduler)
-                System.err.println("Auction monitor error: " + e.getMessage());
+                System.err.println("Lỗi khi chạy task mở phòng: " + e.getMessage());
             }
-        }, 0, 1, TimeUnit.SECONDS);
+        }, delayInSeconds, TimeUnit.SECONDS);
+    }
+
+    /**
+     * BÁO THỨC ĐÓNG PHÒNG
+     */
+    public void scheduleAuctionEnd(long delayInSeconds, Runnable targetTask) {
+        scheduler.schedule(() -> {
+            try {
+                targetTask.run(); // Đến giờ thì kích hoạt hành động được giao
+            } catch (Exception e) {
+                System.err.println("Lỗi khi chạy task đóng phòng: " + e.getMessage());
+            }
+        }, delayInSeconds, TimeUnit.SECONDS);
     }
 
     /** Thêm 1 phiên đấu giá vào cache. */
     public void addAuction(Auction auction) {
         auctions.put(auction.getId(), auction);
-    }
-
-    /**
-     * Đồng bộ cache với dữ liệu từ DAO (multi-JVM scenario).
-     *
-     * <p><b>Logic:</b>
-     * <ul>
-     *   <li>Nếu auction chưa có trong cache → thêm mới</li>
-     *   <li>Nếu đã có → chỉ cập nhật status và endTime (giữ ReentrantLock cũ
-     *       để tránh mất context của các thread đang bid)</li>
-     * </ul>
-     */
-    public void syncAuctions(java.util.Collection<Auction> loaded) {
-        for (Auction loadedAuction : loaded) {
-            Auction existing = auctions.get(loadedAuction.getId());
-            if (existing == null) {
-                // Chưa có → thêm mới
-                auctions.put(loadedAuction.getId(), loadedAuction);
-            } else {
-                // Đã có → chỉ merge các field có thể đổi
-                existing.setStatus(loadedAuction.getStatus());
-                if (loadedAuction.getEndTime() != null) {
-                    existing.setEndTime(loadedAuction.getEndTime());
-                }
-            }
-        }
     }
 
     /** Lấy 1 phiên theo id (null nếu không có). */

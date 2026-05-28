@@ -2,7 +2,9 @@ package com.auction.network.handler;
 
 import com.auction.exception.InvalidBidException;
 import com.auction.model.user.User;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
+import com.auction.network.message.Response;
+import com.auction.network.message.request.RegisterAutoBidRequest;
 import com.auction.service.AuctionService;
 
 /**
@@ -10,15 +12,8 @@ import com.auction.service.AuctionService;
  * REGISTERAUTOBIDHANDLER - ĐĂNG KÝ AUTO-BID (PROXY BIDDING)
  * ============================================================================
  *
- * <p>Bidder đăng ký maxBid + increment. Server sẽ tự bid hộ user khi:
- * <ul>
- *   <li>Có bid mới vượt user → server tự bid (currentBid + increment)</li>
- *   <li>Dừng khi vượt maxBid của user</li>
- * </ul>
- *
- * <p>Sau khi đăng ký, AuctionService.registerAutoBid() sẽ kích hoạt ngay
- * processAutoBids() nếu user chưa dẫn đầu → có thể tạo nhiều bid mới ngay
- * trong 1 request này.
+ * <p>Bidder đăng ký maxBid + increment. Server sẽ tự bid hộ user khi
+ * có bid mới vượt user, dừng khi vượt maxBid.
  */
 public class RegisterAutoBidHandler implements RequestHandler {
 
@@ -31,18 +26,19 @@ public class RegisterAutoBidHandler implements RequestHandler {
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (authenticatedUser == null) return HandlerUtils.error("Chưa đăng nhập");
+        if (!(request instanceof RegisterAutoBidRequest req)) {
+            return HandlerUtils.error("Request không hợp lệ");
+        }
 
         try {
             auctionService.registerAutoBid(
-                    request.get("auctionId"),
+                    req.getAuctionId(),
                     authenticatedUser.getId(),
                     authenticatedUser.getFullName(),
-                    Double.parseDouble(request.get("maxBid")),
-                    Double.parseDouble(request.get("increment")));
+                    req.getMaxBid(),
+                    req.getIncrement());
 
-            Message response = new Message(Message.Type.SUCCESS);
-            response.put("message", "Auto-Bid đã kích hoạt");
-            return response;
+            return Response.success();
         } catch (InvalidBidException e) {
             return HandlerUtils.error(e.getMessage());
         }

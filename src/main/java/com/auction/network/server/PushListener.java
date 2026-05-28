@@ -1,6 +1,6 @@
 package com.auction.network.server;
 
-import com.auction.network.Message;
+import com.auction.network.message.Message;
 
 /**
  * ============================================================================
