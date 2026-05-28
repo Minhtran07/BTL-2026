@@ -1,9 +1,10 @@
 package com.auction.network.server;
 
 import com.auction.model.user.User;
-import com.auction.network.Message;
+import com.auction.network.message.Message;
+import com.auction.network.message.Response;
+import com.auction.network.message.request.*;
 import com.auction.network.handler.*;
-import com.auction.pattern.observer.AuctionObserver;
 import com.auction.service.AuctionService;
 import com.auction.service.UserService;
 
@@ -31,12 +32,13 @@ import java.util.concurrent.*;
  *
  * <p><b>COMMAND PATTERN (qua RequestHandler):</b>
  * Mỗi loại request có 1 handler riêng (LoginHandler, PlaceBidHandler...).
- * {@link #handlerMap} map từ MessageType → handler. Dispatch theo bảng thay
- * vì switch case dài → dễ mở rộng, tuân thủ Open/Closed Principle.
+ * {@link #handlerMap} map từ {@code Class<? extends Message>} → handler.
+ * Dispatch đa hình theo class thay vì switch-case → dễ mở rộng, tuân thủ
+ * Open/Closed Principle.
  *
  * <p><b>OBSERVER PATTERN per-auction subscription:</b>
  * Mỗi {@link ClientHandler} là 1 {@link PushListener}. Khi client gửi
- * {@code SUBSCRIBE_AUCTION}, handler đăng ký vào {@link PushForwarder}.
+ * {@link SubscribeAuctionRequest}, handler đăng ký vào {@link PushForwarder}.
  * Khi có event → forwarder chỉ gửi cho các client đã subscribe đúng phiên đó
  * (không broadcast tất cả → tiết kiệm bandwidth).
  *
@@ -70,15 +72,14 @@ public class AuctionServer {
     private final List<ClientHandler> connectedClients = new CopyOnWriteArrayList<>();
 
     /**
-     * Map đa hình: Message.Type → RequestHandler tương ứng.
+     * Map đa hình: {@code Class<? extends Message>} → {@link RequestHandler}.
      *
      * <p><b>Đây là COMMAND PATTERN.</b> Thay vì switch-case dài 30 case,
-     * chỉ cần lookup map → gọi handle(). Thêm loại request mới chỉ cần thêm
-     * 1 dòng vào {@link #buildHandlerMap()} - không sửa code khác (OCP).
-     *
-     * <p>{@link EnumMap}: tối ưu hơn HashMap khi key là enum.
+     * chỉ cần lookup map theo class → gọi handle(). Thêm loại request mới
+     * chỉ cần thêm 1 dòng vào {@link #buildHandlerMap()} - không sửa code
+     * khác (OCP).
      */
-    private final Map<Message.Type, RequestHandler> handlerMap;
+    private final Map<Class<? extends Message>, RequestHandler> handlerMap;
 
     /** Cờ chạy/dừng server. volatile để các thread thấy thay đổi ngay. */
     private volatile boolean running;
@@ -98,39 +99,37 @@ public class AuctionServer {
     /**
      * Đăng ký tất cả handler vào map — thêm loại request mới chỉ cần thêm một dòng ở đây.
      */
-    private Map<Message.Type, RequestHandler> buildHandlerMap() {
-        Map<Message.Type, RequestHandler> map = new EnumMap<>(Message.Type.class);
+    private Map<Class<? extends Message>, RequestHandler> buildHandlerMap() {
+        Map<Class<? extends Message>, RequestHandler> map = new HashMap<>();
 
         // Auth
-        map.put(Message.Type.LOGIN,    new LoginHandler(userService));
-        map.put(Message.Type.REGISTER, new RegisterHandler(userService));
-        map.put(Message.Type.LOGOUT,   new LogoutHandler());
+        map.put(LoginRequest.class,    new LoginHandler(userService));
+        map.put(RegisterRequest.class,  new RegisterHandler(userService));
+        map.put(LogoutRequest.class,    new LogoutHandler());
 
         // Item
-        map.put(Message.Type.CREATE_ITEM,  new CreateItemHandler(auctionService));
-        map.put(Message.Type.GET_ITEM,     new GetItemHandler(auctionService));
-        map.put(Message.Type.GET_ALL_ITEMS, new GetAllItemsHandler(auctionService));
-        map.put(Message.Type.UPDATE_ITEM,  new UpdateItemHandler(auctionService));
-        map.put(Message.Type.DELETE_ITEM,  new DeleteItemHandler(auctionService));
+        map.put(CreateItemRequest.class,   new CreateItemHandler(auctionService));
+        map.put(GetItemRequest.class,      new GetItemHandler(auctionService));
+        map.put(GetAllItemsRequest.class,  new GetAllItemsHandler(auctionService));
+        map.put(UpdateItemRequest.class,   new UpdateItemHandler(auctionService));
+        map.put(DeleteItemRequest.class,   new DeleteItemHandler(auctionService));
 
         // Auction
-        map.put(Message.Type.CREATE_AUCTION,     new CreateAuctionHandler(auctionService));
-        map.put(Message.Type.GET_ALL_AUCTIONS,   new GetAllAuctionsHandler(auctionService));
-        map.put(Message.Type.GET_ACTIVE_AUCTIONS, new GetActiveAuctionsHandler(auctionService));
-        map.put(Message.Type.GET_AUCTION,        new GetAuctionHandler(auctionService));
-        map.put(Message.Type.END_AUCTION,        new EndAuctionHandler(auctionService));
-        map.put(Message.Type.CANCEL_AUCTION,     new CancelAuctionHandler(auctionService));
+        map.put(CreateAuctionRequest.class,      new CreateAuctionHandler(auctionService));
+        map.put(GetAllAuctionsRequest.class,     new GetAllAuctionsHandler(auctionService));
+        map.put(GetActiveAuctionsRequest.class,  new GetActiveAuctionsHandler(auctionService));
+        map.put(GetAuctionRequest.class,         new GetAuctionHandler(auctionService));
+        map.put(EndAuctionRequest.class,         new EndAuctionHandler(auctionService));
+        map.put(CancelAuctionRequest.class,      new CancelAuctionHandler(auctionService));
 
-        // Bidding — không còn truyền BidBroadcaster: AuctionService đã dispatch
-        // NEW_BID event qua AuctionEventDispatcher, các ClientHandler đã subscribe
-        // sẽ tự nhận và đẩy BID_UPDATE/AUCTION_EVENT về client tương ứng.
-        map.put(Message.Type.PLACE_BID,          new PlaceBidHandler(auctionService));
-        map.put(Message.Type.REGISTER_AUTO_BID,  new RegisterAutoBidHandler(auctionService));
-        map.put(Message.Type.GET_BID_HISTORY,    new GetBidHistoryHandler(auctionService));
+        // Bidding
+        map.put(PlaceBidRequest.class,           new PlaceBidHandler(auctionService));
+        map.put(RegisterAutoBidRequest.class,    new RegisterAutoBidHandler(auctionService));
+        map.put(GetBidHistoryRequest.class,      new GetBidHistoryHandler(auctionService));
 
         // Admin
-        map.put(Message.Type.GET_ALL_USERS,   new GetAllUsersHandler(userService));
-        map.put(Message.Type.DEACTIVATE_USER, new DeactivateUserHandler(userService));
+        map.put(GetAllUsersRequest.class,    new GetAllUsersHandler(userService));
+        map.put(DeactivateUserRequest.class, new DeactivateUserHandler(userService));
 
         return Collections.unmodifiableMap(map);
     }
@@ -252,33 +251,40 @@ public class AuctionServer {
 
         /**
          * Xử lý request từ client – dispatch đa hình qua handlerMap.
-         * SUBSCRIBE/UNSUBSCRIBE được xử lý inline vì cần truy cập state của handler.
+         *
+         * <p>SUBSCRIBE/UNSUBSCRIBE được xử lý inline vì cần truy cập state
+         * của handler (subscribedAuctions, forwarder).
+         *
+         * <p>Dispatch dùng {@code request.getClass()} thay vì enum Type.
          */
         private Message processRequest(Message request) {
-            if (request == null || request.getType() == null) {
-                return HandlerUtils.error("Request không hợp lệ");
+            if (request == null) {
+                return Response.error("Request không hợp lệ");
             }
 
-            // Observer pattern: SUBSCRIBE/UNSUBSCRIBE thao tác trực tiếp trên handler
-            switch (request.getType()) {
-                case SUBSCRIBE_AUCTION:   return handleSubscribe(request);
-                case UNSUBSCRIBE_AUCTION: return handleUnsubscribe(request);
-                default: /* fall through to handlerMap dispatch */ break;
+            // Dispatch subscribe/unsubscribe bằng instanceof (cần state của handler)
+            if (request instanceof SubscribeAuctionRequest sub) {
+                return handleSubscribe(sub);
+            }
+            if (request instanceof UnsubscribeAuctionRequest unsub) {
+                return handleUnsubscribe(unsub);
             }
 
-            RequestHandler handler = handlerMap.get(request.getType());
+            // Dispatch đa hình qua class → handler map
+            RequestHandler handler = handlerMap.get(request.getClass());
             if (handler == null) {
-                return HandlerUtils.error("Loại request không được hỗ trợ: " + request.getType());
+                return HandlerUtils.error(
+                        "Loại request không được hỗ trợ: " + request.getClass().getSimpleName());
             }
 
             try {
                 Message response = handler.handle(request, authenticatedUser);
 
                 // Cập nhật session state sau các thao tác thay đổi trạng thái xác thực
-                if (request.getType() == Message.Type.LOGIN
-                        && response.getType() == Message.Type.SUCCESS) {
+                if (request instanceof LoginRequest
+                        && response instanceof Response<?> r && r.isSuccess()) {
                     authenticatedUser = ((LoginHandler) handler).getLastAuthenticatedUser();
-                } else if (request.getType() == Message.Type.LOGOUT) {
+                } else if (request instanceof LogoutRequest) {
                     authenticatedUser = null;
                     unsubscribeAll();
                 }
@@ -289,32 +295,26 @@ public class AuctionServer {
             }
         }
 
-        private Message handleSubscribe(Message request) {
-            String auctionId = request.get("auctionId");
+        private Message handleSubscribe(SubscribeAuctionRequest sub) {
+            String auctionId = sub.getAuctionId();
             if (auctionId == null || auctionId.isBlank()) {
-                return HandlerUtils.error("Thiếu auctionId để subscribe");
+                return Response.error("Thiếu auctionId để subscribe");
             }
             if (subscribedAuctions.add(auctionId)) {
                 forwarder.subscribe(auctionId, this);
             }
-            Message ok = new Message(Message.Type.SUCCESS);
-            ok.put("auctionId", auctionId);
-            ok.put("message", "Đã subscribe phiên " + auctionId);
-            return ok;
+            return Response.success();
         }
 
-        private Message handleUnsubscribe(Message request) {
-            String auctionId = request.get("auctionId");
+        private Message handleUnsubscribe(UnsubscribeAuctionRequest unsub) {
+            String auctionId = unsub.getAuctionId();
             if (auctionId == null || auctionId.isBlank()) {
-                return HandlerUtils.error("Thiếu auctionId để unsubscribe");
+                return Response.error("Thiếu auctionId để unsubscribe");
             }
             if (subscribedAuctions.remove(auctionId)) {
                 forwarder.unsubscribe(auctionId, this);
             }
-            Message ok = new Message(Message.Type.SUCCESS);
-            ok.put("auctionId", auctionId);
-            ok.put("message", "Đã unsubscribe phiên " + auctionId);
-            return ok;
+            return Response.success();
         }
 
         private void unsubscribeAll() {
