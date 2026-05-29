@@ -30,7 +30,6 @@ public class GetAllUsersHandler implements RequestHandler {
             return HandlerUtils.error("Không có quyền truy cập");
         }
 
-        ArrayList<User> users = new ArrayList<>(userService.findAll());
-        return Response.success((Serializable) users);
+        return Response.success((Serializable) userService.findAll());
     }
 }

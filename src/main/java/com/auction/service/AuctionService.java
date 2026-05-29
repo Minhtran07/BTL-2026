@@ -16,22 +16,27 @@ import com.auction.model.user.Seller;
 import com.auction.pattern.factory.ItemFactory;
 import com.auction.pattern.observer.AuctionEvent;
 import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.singleton.AuctionManager;
+import com.auction.pattern.singleton.AuctionRegistry;
 import com.auction.pattern.strategy.BidValidationStrategy;
 import com.auction.pattern.strategy.StandardBidValidation;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.locks.ReentrantLock;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 /**
  * Service xử lý nghiệp vụ đấu giá — lớp orchestration trung tâm cho toàn bộ
  * vòng đời phiên đấu giá (tạo, đặt giá, auto-bid, kết thúc, thanh toán, huỷ).
  *
  * <p><b>Vai trò:</b> đóng vai trò facade giữa tầng UI/controller và tầng
- * domain/DAO. Service không tự cache state mà uỷ thác cho {@link AuctionManager}
+ * domain/DAO. Service không tự cache state mà uỷ thác cho {@link AuctionRegistry}
  * (singleton in-memory) và DAO ({@link AuctionDaoImpl}).
  *
  * <p><b>Tích hợp design patterns:</b>
@@ -40,7 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li><b>Strategy</b> — {@link BidValidationStrategy} cho luật validate bid</li>
  *   <li><b>Observer</b> — {@link AuctionEventDispatcher} broadcast các sự kiện
  *       NEW_BID / AUTO_BID / AUCTION_STARTED / AUCTION_ENDED / AUCTION_CANCELED</li>
- *   <li><b>Singleton</b> — {@link AuctionManager}, {@link AuctionEventDispatcher}</li>
+ *   <li><b>Singleton</b> — {@link AuctionRegistry}, {@link AuctionEventDispatcher}</li>
  * </ul>
  *
  * <p><b>Thanh toán (settlement):</b> Khi {@link #endAuction(String)} được gọi,
@@ -62,7 +67,7 @@ public class AuctionService {
     private final GenericDao<Item>    itemDao;
     private final GenericDao<Auction> auctionDao;
     private final UserService         userService;
-    private final AuctionManager      auctionManager;
+    private final AuctionRegistry auctionRegistry;
     private final AuctionEventDispatcher eventDispatcher;
     private final BidValidationStrategy  bidValidator;
 
@@ -71,14 +76,27 @@ public class AuctionService {
      * Đảm bảo tính duy nhất của Object khóa trên RAM cho mỗi phòng đấu giá.
      * Giúp hệ thống không bị nghẽn cổ chai toàn cục (Global Bottleneck).
      */
-    private final ConcurrentHashMap<String, Object> auctionLocks = new ConcurrentHashMap<>();
+    private final Cache<String, ReentrantLock> lockCache = CacheBuilder.newBuilder()
+        .weakValues() // ĐÂY LÀ CHÌA KHÓA: Tự dọn dẹp lock khi không dùng đến nữa
+        .build();
+
+    // Hàm tiện ích để lấy Lock theo Auction ID
+    private ReentrantLock getLock(String auctionId) {
+        try {
+            // Nếu có lock cũ thì trả về, nếu chưa có thì chạy hàm ReentrantLock::new để tạo mới
+            return lockCache.get(auctionId, ReentrantLock::new);
+        } catch (ExecutionException e) {
+            // Phòng hờ lỗi khởi tạo, trả về một lock mới
+            return new ReentrantLock();
+        }
+    }
 
     /** Constructor mặc định (production). */
     public AuctionService() {
         this.itemDao        = new ItemDaoImpl();
         this.auctionDao     = new AuctionDaoImpl();
         this.userService    = new UserService();
-        this.auctionManager = AuctionManager.getInstance();
+        this.auctionRegistry = AuctionRegistry.getInstance();
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator   = new StandardBidValidation();
     }
@@ -100,7 +118,7 @@ public class AuctionService {
         this.itemDao         = itemDao;
         this.auctionDao      = auctionDao;
         this.userService     = userService;
-        this.auctionManager  = AuctionManager.getInstance();
+        this.auctionRegistry = AuctionRegistry.getInstance();
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator    = new StandardBidValidation();
     }
@@ -139,30 +157,30 @@ public class AuctionService {
 
         Auction auction = new Auction(itemId, sellerId, itemName, startingPrice, startTime, endTime);
 
-        // Tự động bắt đầu nếu đã quá thời gian bắt đầu
-        if (LocalDateTime.now().isAfter(startTime)) {
-            auction.start();
-        }
-
-        auctionDao.save(auction);
-        auctionManager.addAuction(auction);
-
         // 1. CÀI BÁO THỨC MỞ PHÒNG bằng Lambda
         long startDelay = java.time.Duration.between(LocalDateTime.now(), startTime).toSeconds();
         if (startDelay > 0) {
             // Ta bảo Manager: "Đến giờ thì tự chạy hàm startAuctionProactively(auctionId) của tôi nhé"
-            auctionManager.scheduleAuctionStart(startDelay, () -> this.startAuctionProactively(auction.getId()));
+            auctionRegistry.scheduleAuctionStart(startDelay, () -> this.startAuctionProactively(auction.getId()));
         } else {
-            auction.start();
-            auctionDao.update(auction);
+            ReentrantLock lock = getLock(auction.getId());
+            lock.lock();
+            try {
+                auction.start();
+            } finally {
+                lock.unlock();
+            }
         }
 
         // 2. CÀI BÁO THỨC ĐÓNG PHÒNG bằng Lambda
         long endDelay = java.time.Duration.between(LocalDateTime.now(), endTime).toSeconds();
         if (endDelay > 0) {
             // Ta bảo Manager: "Đến giờ thì tự gọi hàm endAuction(auctionId) của tôi"
-            auctionManager.scheduleAuctionEnd(endDelay, () -> this.endAuction(auction.getId()));
+            auctionRegistry.scheduleAuctionEnd(endDelay, () -> this.endAuction(auction.getId()));
         }
+
+        auctionDao.save(auction);
+        auctionRegistry.addAuction(auction);
 
         eventDispatcher.dispatch(new AuctionEvent(
                 AuctionEvent.EventType.AUCTION_STARTED,
@@ -173,17 +191,20 @@ public class AuctionService {
     }
 
     public void startAuctionProactively(String auctionId) {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        ReentrantLock lock = getLock(auctionId);
         boolean isStarted = false;
 
-        synchronized (lock) {
-            Auction auction = auctionManager.getAuction(auctionId);
+        lock.lock(); // Thay thế synchronized bằng ReentrantLock từ Guava Cache
+        try {
+            Auction auction = resolveAuction(auctionId);
             if (auction != null && auction.getStatus() == AuctionStatus.OPEN) {
-                auction.start();             // OPEN -> RUNNING trên RAM
-                auctionDao.update(auction);  // Lưu xuống SQLite
+                auction.start();
+                auctionDao.update(auction);
                 isStarted = true;
             }
-        } // Nhả khóa phòng nhanh chóng
+        } finally {
+            lock.unlock(); // Luôn luôn giải phóng khóa trong khối finally
+        }
 
         // Bắn event ra ngoài để đẩy qua WebSocket lên GUI realtime!
         if (isStarted) {
@@ -199,14 +220,15 @@ public class AuctionService {
      */
     public BidTransaction placeBid(String auctionId, String bidderId, String bidderName,
                                    double amount) throws InvalidBidException, AuctionClosedException {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        ReentrantLock lock = getLock(auctionId);
 
         Auction auction;
         BidTransaction transaction;
         List<BidTransaction> autoBidResults;
 
-        synchronized (lock) {
-            auction = auctionManager.getAuction(auctionId);
+        lock.lock(); // Đảm bảo tại một thời điểm chỉ có 1 thread được đặt cược vào phòng này
+        try {
+            auction = resolveAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá: " + auctionId);
             }
@@ -230,6 +252,8 @@ public class AuctionService {
             // Tối ưu: chỉ persist xuống DAO 1 lần sau khi cả burst kết thúc
             autoBidResults = auction.processAutoBids(bidderId);
             auctionDao.update(auction);
+        } finally {
+            lock.unlock();
         }
 
         // Thông báo qua Observer Pattern
@@ -255,13 +279,14 @@ public class AuctionService {
      */
     public void registerAutoBid(String auctionId, String bidderId, String bidderName,
                                 double maxBid, double increment) throws InvalidBidException {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        ReentrantLock lock = getLock(auctionId);
 
         Auction auction;
         List<BidTransaction> autoBidResults = List.of();
 
-        synchronized (lock) {
-            auction = auctionManager.getAuction(auctionId);
+        lock.lock();
+        try {
+            auction = resolveAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá");
             }
@@ -284,6 +309,8 @@ public class AuctionService {
 
             // Tối ưu: chỉ persist 1 lần sau cả burst.
             auctionDao.update(auction);
+        } finally {
+            lock.unlock();
         }
 
         if (!autoBidResults.isEmpty()) {
@@ -298,21 +325,97 @@ public class AuctionService {
     }
 
     /**
-     * get Auction by ID from cache
+     * Lấy Auction theo ID — cache-first với DB fallback.
+     *
+     * <p>Thử lấy từ AuctionManager (in-memory cache) trước. Nếu cache miss
+     * (server vừa restart, phiên chưa được load, hoặc phiên đã bị evict),
+     * tự động fallback sang DB và warm cache để lần sau không miss nữa.
+     *
+     * <p>Đây là pattern <b>Cache-Aside (Lazy Loading)</b>: chỉ load vào cache
+     * khi thực sự cần, thay vì preload toàn bộ.
      */
     public Optional<Auction> getAuction(String auctionId) {
-        return Optional.ofNullable(auctionManager.getAuction(auctionId));
-    }
-    /**
-     * get Auction by ID from database
-     */
-    public Optional<Auction> getFreshAuction(String auctionId) {
-        return auctionDao.findById(auctionId);
+        Auction cached = auctionRegistry.getAuction(auctionId);
+        if (cached != null) return Optional.of(cached);
+        // Cache miss → fallback DB và warm cache
+        return getFreshAuction(auctionId);
     }
 
-    public List<Auction> getAllAuctions()                     { return auctionManager.getAllAuctions(); }
-    public List<Auction> getActiveAuctions()                  { return auctionManager.getActiveAuctions(); }
-    public List<Auction> getAuctionsBySeller(String sellerId) { return auctionManager.getAuctionsBySeller(sellerId); }
+    /**
+     * Lấy Auction trực tiếp từ DB (bỏ qua cache) — dùng khi cần data mới nhất
+     * (vd: client vừa mở trang chi tiết).
+     */
+    public Optional<Auction> getFreshAuction(String auctionId) {
+        Optional<Auction> opt = auctionDao.findById(auctionId);
+        opt.ifPresent(auctionRegistry::addAuction); // warm cache
+        return opt;
+    }
+
+    /**
+     * Lấy tất cả phiên đấu giá — DB là nguồn chính (vì cache chỉ giữ phiên active),
+     * nhưng ưu tiên object từ cache cho các phiên đang OPEN/RUNNING.
+     *
+     * <p><b>Tại sao ưu tiên cache?</b> Với phiên đang chạy, bản cache có state
+     * mới nhất (bid in-memory chưa flush xuống DB), trong khi bản DB có thể stale
+     * vài giây. Phiên đã kết thúc/huỷ thì lấy từ DB vì cache đã evict.
+     */
+    public List<Auction> getAllAuctions() {
+        List<Auction> fromDb = auctionDao.findAll();
+        List<Auction> result = new ArrayList<>(fromDb.size());
+        for (Auction dbAuction : fromDb) {
+            Auction cached = auctionRegistry.getAuction(dbAuction.getId());
+            if (cached != null) {
+                // Bản cache mới hơn cho phiên active → ưu tiên
+                result.add(cached);
+            } else {
+                result.add(dbAuction);
+                // Warm cache nếu phiên đang active mà chưa có trong cache
+                if (dbAuction.getStatus() == AuctionStatus.OPEN
+                        || dbAuction.getStatus() == AuctionStatus.RUNNING) {
+                    auctionRegistry.addAuction(dbAuction);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Lấy các phiên đang chạy — cache-first, warm từ DB nếu cache rỗng.
+     *
+     * <p>Trường hợp cache rỗng xảy ra khi server vừa restart — chưa có client
+     * nào trigger load. Method này tự warm cache từ DB một lần, các lần gọi
+     * tiếp theo sẽ hit cache trực tiếp (O(n) filter trên ConcurrentHashMap).
+     */
+    public List<Auction> getActiveAuctions() {
+        List<Auction> cached = auctionRegistry.getActiveAuctions();
+        if (!cached.isEmpty()) return cached;
+        // Cache cold → warm từ DB
+        warmCacheFromDb();
+        return auctionRegistry.getActiveAuctions();
+    }
+
+    /**
+     * Lấy các phiên của 1 seller — cache-first, warm từ DB nếu cache rỗng.
+     */
+    public List<Auction> getAuctionsBySeller(String sellerId) {
+        List<Auction> cached = auctionRegistry.getAuctionsBySeller(sellerId);
+        if (!cached.isEmpty()) return cached;
+        // Cache cold → warm từ DB rồi thử lại
+        warmCacheFromDb();
+        return auctionRegistry.getAuctionsBySeller(sellerId);
+    }
+
+    /**
+     * Nạp tất cả phiên OPEN/RUNNING từ DB vào cache.
+     * Gọi khi phát hiện cache rỗng (server vừa restart).
+     */
+    private void warmCacheFromDb() {
+        for (Auction a : auctionDao.findAll()) {
+            if (a.getStatus() == AuctionStatus.OPEN || a.getStatus() == AuctionStatus.RUNNING) {
+                auctionRegistry.addAuction(a);
+            }
+        }
+    }
 
     /**
      * Kết thúc phiên đấu giá thủ công và thực hiện thanh toán tự động.
@@ -320,20 +423,24 @@ public class AuctionService {
      * <p>Thứ tự: finish() → settleAuction() → dispatch AUCTION_ENDED event.
      */
     public void endAuction(String auctionId) {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
-
+        ReentrantLock lock = getLock(auctionId);
         Auction auction;
 
-        synchronized (lock) {
-            auction = auctionManager.getAuction(auctionId);
+        lock.lock();
+        try {
+            auction = resolveAuction(auctionId);
             if (auction == null) return;
 
             auction.finish();
             auctionDao.update(auction);
+        } finally {
+            lock.unlock();
         }
 
         // Thực hiện chuyển tiền (trừ người thắng, cộng người bán)
         settleAuction(auction);
+        // Settle tiền xong xuôi thì đuổi hẳn Object khỏi RAM (Cache)
+        auctionRegistry.removeAuction(auctionId);
 
         eventDispatcher.dispatch(new AuctionEvent(
             AuctionEvent.EventType.AUCTION_ENDED,
@@ -362,37 +469,27 @@ public class AuctionService {
         double saleAmount = auction.getCurrentHighestBid();
 
         // --- Trừ tiền người thắng ---
-        userService.findById(winnerId).ifPresent(winnerUser -> {
-            if (winnerUser instanceof Bidder bidder) {
-                boolean deducted = bidder.deductBalance(saleAmount);
-                if (!deducted) {
-                    System.err.printf("[Settlement] Cảnh báo: Bidder %s không đủ số dư (%.2f) " +
-                            "cho phiên %s%n", bidder.getUsername(), saleAmount, auction.getId());
-                    // Vẫn ghi nhận giao dịch; trong hệ thống thực cần xử lý thêm
-                }
-                userService.updateUser(bidder);
-            }
-        });
+        boolean deducted = userService.deductBidderBalance(winnerId, saleAmount);
+        if (!deducted) {
+            System.err.printf("[Settlement] Cảnh báo: Bidder %s không đủ số dư (%.2f) " +
+                "cho phiên %s%n",  auction.getCurrentHighestBidderName(), saleAmount, auction.getId());
+            // Vẫn ghi nhận giao dịch; trong hệ thống thực cần xử lý thêm
+        }
 
         // --- Cộng doanh thu người bán ---
-        userService.findById(auction.getSellerId()).ifPresent(sellerUser -> {
-            if (sellerUser instanceof Seller seller) {
-                seller.addRevenue(saleAmount);
-                userService.updateUser(seller);
-            }
-        });
+        userService.addSellerRevenue(auction.getSellerId(), saleAmount);
     }
 
     /**
      * Hủy phiên đấu giá.
      */
     public void cancelAuction(String auctionId) {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
-
+        ReentrantLock lock = getLock(auctionId);
         boolean isCanceledSuccessfully = false;
 
-        synchronized (lock) {
-            Auction auction = auctionManager.getAuction(auctionId);
+        lock.lock();
+        try {
+            Auction auction = resolveAuction(auctionId);
             if (auction != null) {
                 auction.cancel();
                 auctionDao.update(auction);
@@ -402,8 +499,11 @@ public class AuctionService {
                     auctionId,
                     "Phiên đấu giá đã bị hủy"));
             }
+        } finally {
+            lock.unlock();
         }
         if (isCanceledSuccessfully) {
+            auctionRegistry.removeAuction(auctionId);
             eventDispatcher.dispatch(new AuctionEvent(
                 AuctionEvent.EventType.AUCTION_CANCELED,
                 auctionId,
@@ -412,10 +512,39 @@ public class AuctionService {
     }
 
     /**
-     * Lấy lịch sử bid của phiên.
+     * Lấy lịch sử bid của phiên — cache-first với DB fallback.
      */
     public List<BidTransaction> getBidHistory(String auctionId) {
-        Auction auction = auctionManager.getAuction(auctionId);
+        Auction auction = resolveAuction(auctionId);
         return auction != null ? auction.getBidHistory() : List.of();
+    }
+
+    // ==================== Internal Helpers ====================
+
+    /**
+     * Lấy Auction từ cache, fallback sang DB nếu cache miss.
+     *
+     * <p>Dùng nội bộ bởi các method nghiệp vụ (placeBid, endAuction...)
+     * thay vì truy cập trực tiếp {@code auctionManager.getAuction()} —
+     * đảm bảo mọi thao tác đều xử lý được cache miss (vd: server vừa
+     * restart mà client gọi placeBid ngay trước khi cache được warm).
+     * <p> Áp dụng double-checked locking để đảm bảo duy nhất một luồng
+     * được load từ DB và warm cache.
+     * @return Auction object hoặc null nếu không tìm thấy cả trong cache lẫn DB
+     */
+    private Auction resolveAuction(String auctionId) {
+        Auction auction = auctionRegistry.getAuction(auctionId);
+        if (auction != null) return auction;
+
+        ReentrantLock lock = getLock(auctionId);
+        lock.lock();
+        try {
+            // Cache miss → load từ DB và warm cache
+            Optional<Auction> opt = auctionDao.findById(auctionId);
+            opt.ifPresent(auctionRegistry::addAuction);
+            return opt.orElse(null);
+        } finally {
+            lock.unlock(); // Nhả lock
+        }
     }
 }

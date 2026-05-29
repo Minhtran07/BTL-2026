@@ -12,7 +12,7 @@ import com.auction.model.item.ItemCategory;
 import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
 import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.singleton.AuctionManager;
+import com.auction.pattern.singleton.AuctionRegistry;
 import org.junit.jupiter.api.*;
 
 import java.time.LocalDateTime;
@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit Test cho AuctionService.
  *
  * <p><b>Cách ly hoàn toàn</b>: tất cả DAOs đều là in-memory — không đọc hoặc
- * ghi file nào trên đĩa.  Singleton {@link AuctionManager} và
+ * ghi file nào trên đĩa.  Singleton {@link AuctionRegistry} và
  * {@link AuctionEventDispatcher} được reset trước mỗi test để tránh side-effects.
  */
 class AuctionServiceTest {
@@ -58,7 +58,7 @@ class AuctionServiceTest {
     void setUp() {
         // Reset Singletons để tránh side effects giữa các test
         AuctionEventDispatcher.resetInstance();
-        AuctionManager.resetInstance();
+        AuctionRegistry.resetInstance();
 
         // Tất cả DAOs đều in-memory — không chạm file hệ thống
         GenericDao<Item>    itemDao    = new InMemoryDao<>();
@@ -70,7 +70,7 @@ class AuctionServiceTest {
 
     @AfterAll
     static void tearDownAll() {
-        AuctionManager.resetInstance();
+        AuctionRegistry.resetInstance();
         AuctionEventDispatcher.resetInstance();
     }
 

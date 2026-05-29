@@ -3,7 +3,7 @@
  *
  * <ul>
  *   <li>{@link com.auction.pattern.singleton} — Singleton:
- *       {@link com.auction.pattern.singleton.AuctionManager} đảm bảo
+ *       {@link com.auction.pattern.singleton.AuctionRegistry} đảm bảo
  *       1 instance quản lý vòng đời mọi phiên.</li>
  *   <li>{@link com.auction.pattern.observer} — Observer + Event Bus
  *       (2 kênh: per-auction và global) cho realtime bid updates.</li>

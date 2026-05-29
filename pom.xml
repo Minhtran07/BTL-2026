@@ -19,6 +19,7 @@
         <javafx.version>21</javafx.version>
         <junit.version>5.10.2</junit.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <guava.version>33.0.0-jre</guava.version>
         <checkstyle.plugin.version>3.3.1</checkstyle.plugin.version>
         <checkstyle.version>10.17.0</checkstyle.version>
         <coverage.minimum>0.60</coverage.minimum>
@@ -62,6 +63,13 @@
             <artifactId>junit-jupiter</artifactId>
             <version>${junit.version}</version>
             <scope>test</scope>
+        </dependency>
+
+        <!-- Guava Cache -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
         </dependency>
     </dependencies>
 

@@ -2,11 +2,10 @@ package com.auction.pattern.singleton;
 
 import com.auction.model.auction.Auction;
 import com.auction.model.auction.AuctionStatus;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -35,20 +34,19 @@ import java.util.stream.Collectors;
  * an toàn cho việc đọc/ghi song song mà không cần lock toàn bộ.
  *
  */
-public class AuctionManager {
+public class AuctionRegistry {
 
     /**
      * Instance Singleton.
      * <b>volatile</b> đảm bảo các thread nhìn thấy giá trị mới nhất (memory visibility).
      */
-    private static volatile AuctionManager instance;
+    private static volatile AuctionRegistry instance;
 
     /**
-     * Cache các phiên đấu giá trong RAM.
+     * Cache các phiên đấu giá trong RAM thay cho ConcurrentHashMap.
      * Key = auctionId, Value = Auction object.
-     * Dùng ConcurrentHashMap để thread-safe.
      */
-    private final Map<String, Auction> auctions;
+    private final Cache<String, Auction> auctionCache;
 
     /**
      * Scheduler chạy task định kỳ (kiểm tra phiên hết giờ).
@@ -60,9 +58,12 @@ public class AuctionManager {
      * Constructor PRIVATE - đặc trưng Singleton.
      * Khởi tạo map rỗng + scheduler, sau đó bắt đầu task monitor.
      */
-    private AuctionManager() {
-        this.auctions = new ConcurrentHashMap<>();
-        this.scheduler = Executors.newScheduledThreadPool(8);
+    private AuctionRegistry() {
+        // Khởi tạo Guava Cache: Tự động đuổi khứ bản ghi ra khỏi RAM nếu sau 10 phút không ai đọc/ghi
+        this.auctionCache = CacheBuilder.newBuilder()
+            .expireAfterAccess(10, TimeUnit.MINUTES)
+            .build();
+        this.scheduler = Executors.newScheduledThreadPool(2);
     }
 
     /**
@@ -75,11 +76,11 @@ public class AuctionManager {
      *   <li>Lần 2 (trong lock): kiểm tra lại để tránh 2 thread cùng tạo instance</li>
      * </ul>
      */
-    public static AuctionManager getInstance() {
+    public static AuctionRegistry getInstance() {
         if (instance == null) {
-            synchronized (AuctionManager.class) {
+            synchronized (AuctionRegistry.class) {
                 if (instance == null) {
-                    instance = new AuctionManager();
+                    instance = new AuctionRegistry();
                 }
             }
         }
@@ -114,36 +115,36 @@ public class AuctionManager {
 
     /** Thêm 1 phiên đấu giá vào cache. */
     public void addAuction(Auction auction) {
-        auctions.put(auction.getId(), auction);
+        auctionCache.put(auction.getId(), auction);
     }
 
     /** Lấy 1 phiên theo id (null nếu không có). */
     public Auction getAuction(String auctionId) {
-        return auctions.get(auctionId);
+        return auctionCache.getIfPresent(auctionId);
     }
 
     /** Xóa phiên khỏi cache (vd khi seller hủy). */
     public void removeAuction(String auctionId) {
-        auctions.remove(auctionId);
+        auctionCache.invalidate(auctionId);
     }
 
     /** Lấy tất cả phiên - trả về list immutable (an toàn). */
     public List<Auction> getAllAuctions() {
-        return List.copyOf(auctions.values());
+        return List.copyOf(auctionCache.asMap().values());
     }
 
     /** Lấy chỉ các phiên đang RUNNING (dùng cho list màn hình chính). */
     public List<Auction> getActiveAuctions() {
-        return auctions.values().stream()
-                .filter(a -> a.getStatus() == AuctionStatus.RUNNING)
-                .collect(Collectors.toList());
+        return auctionCache.asMap().values().stream()
+            .filter(a -> a.getStatus() == AuctionStatus.RUNNING)
+            .collect(Collectors.toList());
     }
 
-    /** Lấy các phiên của 1 seller cụ thể. */
+    /** Lấy các phiên của 1 seller cụ thể trên RAM. */
     public List<Auction> getAuctionsBySeller(String sellerId) {
-        return auctions.values().stream()
-                .filter(a -> a.getSellerId().equals(sellerId))
-                .collect(Collectors.toList());
+        return auctionCache.asMap().values().stream()
+            .filter(a -> a.getSellerId().equals(sellerId))
+            .collect(Collectors.toList());
     }
 
     /**

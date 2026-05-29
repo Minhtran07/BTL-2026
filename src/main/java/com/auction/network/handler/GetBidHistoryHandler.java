@@ -31,9 +31,6 @@ public class GetBidHistoryHandler implements RequestHandler {
             return HandlerUtils.error("Request không hợp lệ");
         }
 
-        ArrayList<BidTransaction> history = new ArrayList<>(
-                auctionService.getBidHistory(req.getAuctionId()));
-
-        return Response.success((Serializable) history);
+        return Response.success((Serializable) auctionService.getBidHistory(req.getAuctionId()));
     }
 }
