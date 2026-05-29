@@ -2,6 +2,7 @@ package com.auction.network.message.request;
 
 import com.auction.network.message.Request;
 
+/** Request khóa tài khoản user (chỉ Admin). Chứa userId cần khóa. */
 public class DeactivateUserRequest extends Request {
     private static final long serialVersionUID = 1L;
 

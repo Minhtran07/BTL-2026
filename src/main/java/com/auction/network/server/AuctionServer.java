@@ -127,6 +127,9 @@ public class AuctionServer {
         map.put(RegisterAutoBidRequest.class,    new RegisterAutoBidHandler(auctionService));
         map.put(GetBidHistoryRequest.class,      new GetBidHistoryHandler(auctionService));
 
+        // User info (tài chính)
+        map.put(GetUserInfoRequest.class,    new GetUserInfoHandler(userService));
+
         // Admin
         map.put(GetAllUsersRequest.class,    new GetAllUsersHandler(userService));
         map.put(DeactivateUserRequest.class, new DeactivateUserHandler(userService));

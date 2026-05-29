@@ -5,6 +5,11 @@ import com.auction.network.message.Request;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Request tạo sản phẩm mới — chứa category, name, description, price, extraFields.
+ * Handler: {@link com.auction.network.handler.CreateItemHandler}
+ * <p>{@code extraFields} chứa field riêng của subtype (brand, artist, mileage...).
+ */
 public class CreateItemRequest extends Request {
     private static final long serialVersionUID = 1L;
 

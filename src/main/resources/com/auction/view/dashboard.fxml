@@ -19,6 +19,7 @@
             <Region HBox.hgrow="ALWAYS"/>
             <Button fx:id="btnAuctions" text="Phiên đấu giá" styleClass="nav-button" onAction="#handleShowAuctions"/>
             <Button fx:id="btnMyItems" text="Sản phẩm của tôi" styleClass="nav-button" onAction="#handleShowMyItems" visible="false" managed="false"/>
+            <Button fx:id="btnFinance" text="Tài chính" styleClass="nav-button" onAction="#handleShowFinance" visible="false" managed="false"/>
             <Button fx:id="btnAdmin" text="Quản trị" styleClass="nav-button" onAction="#handleShowAdmin" visible="false" managed="false"/>
             <Separator orientation="VERTICAL" style="-fx-border-color: rgba(255,255,255,0.3);"/>
             <Label fx:id="userInfoLabel" style="-fx-text-fill: #d5e8f0; -fx-font-size: 13px;"/>

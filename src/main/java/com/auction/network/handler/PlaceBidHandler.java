@@ -8,6 +8,30 @@ import com.auction.network.message.Response;
 import com.auction.network.message.request.PlaceBidRequest;
 import com.auction.service.AuctionService;
 
+/**
+ * ============================================================================
+ * PLACEBIDHANDLER - XỬ LÝ ĐẶT GIÁ (BID)
+ * ============================================================================
+ *
+ * <p>Nhận {@link PlaceBidRequest} chứa auctionId + amount,
+ * gọi {@link AuctionService#placeBid} để xác thực và ghi nhận bid.
+ *
+ * <p><b>Refactoring:</b> Trước đây dùng {@code request.get("auctionId")} từ
+ * data map chung, ép kiểu thủ công. Giờ dùng {@code instanceof PlaceBidRequest bidReq}
+ * (pattern matching Java 16+) → type-safe, không cần cast, compile-time check.
+ *
+ * <p><b>Service layer xử lý:</b>
+ * <ul>
+ *   <li>Validate: bid phải > giá hiện tại, auction phải đang RUNNING</li>
+ *   <li>Anti-sniping: tự gia hạn nếu bid ở cuối phiên</li>
+ *   <li>Auto-bid: nếu có người khác đăng ký auto-bid, service tự counter-bid</li>
+ *   <li>Push notification: broadcast BidUpdatePush cho tất cả subscriber</li>
+ * </ul>
+ *
+ * <p><b>Error handling:</b> Service ném {@link InvalidBidException} (giá không hợp lệ)
+ * hoặc {@link AuctionClosedException} (phiên đã kết thúc) → handler bắt và trả
+ * {@code Response.error(message)} với thông báo cụ thể.
+ */
 public class PlaceBidHandler implements RequestHandler {
 
     private final AuctionService auctionService;
@@ -16,6 +40,15 @@ public class PlaceBidHandler implements RequestHandler {
         this.auctionService = auctionService;
     }
 
+    /**
+     * Xử lý bid request.
+     *
+     * <p>Pattern matching: {@code instanceof PlaceBidRequest bidReq} — kiểm tra
+     * kiểu + ép kiểu + đặt tên biến trong 1 bước (Java 16+).
+     *
+     * <p>Response: {@code Response.success()} không body (client chỉ cần biết
+     * bid thành công). Chi tiết giá mới sẽ đến qua push event.
+     */
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (authenticatedUser == null) return Response.error("Chưa đăng nhập");
@@ -30,7 +63,7 @@ public class PlaceBidHandler implements RequestHandler {
                     authenticatedUser.getFullName(),
                     bidReq.getAmount());
 
-            return Response.success();
+            return Response.success();  // Không cần body — push event sẽ thông báo giá mới
         } catch (InvalidBidException | AuctionClosedException e) {
             return Response.error(e.getMessage());
         }

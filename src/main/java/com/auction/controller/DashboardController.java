@@ -71,6 +71,7 @@ public class DashboardController {
     @FXML private ScrollPane scrollPane;      // Cho phép scroll khi nhiều card
     @FXML private Button btnCreateAuction;    // Nút tạo phiên (chỉ Seller/Admin)
     @FXML private Button btnMyItems;          // Nút xem sản phẩm của mình (Seller)
+    @FXML private Button btnFinance;          // Nút xem tài chính (Bidder/Seller)
     @FXML private Button btnAdmin;            // Nút Admin panel (Admin)
 
     private final AuctionClientService auctionClientService = AuctionClientService.getInstance();
@@ -138,6 +139,11 @@ public class DashboardController {
             btnCreateAuction.setManaged(true);
             btnMyItems.setVisible(true);
             btnMyItems.setManaged(true);
+        }
+        // Bidder/Seller đều có nút "Tài chính" để xem balance/revenue
+        if (user.getRole() == UserRole.BIDDER || user.getRole() == UserRole.SELLER) {
+            btnFinance.setVisible(true);
+            btnFinance.setManaged(true);
         }
         // Chỉ Admin mới thấy nút "Quản trị"
         if (user.getRole() == UserRole.ADMIN) {
@@ -443,6 +449,12 @@ public class DashboardController {
     private void handleShowMyItems() {
         showingMyItems = true;
         refreshAuctionList();
+    }
+
+    /** Mở màn hình tài chính - Bidder/Seller xem balance/revenue. */
+    @FXML
+    private void handleShowFinance() {
+        MainApp.navigateTo("/com/auction/view/finance.fxml", "Tài chính");
     }
 
     /** Mở admin panel - chỉ Admin có nút này. */
