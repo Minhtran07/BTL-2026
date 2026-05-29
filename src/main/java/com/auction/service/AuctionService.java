@@ -535,15 +535,24 @@ public class AuctionService {
      * thay vì truy cập trực tiếp {@code auctionManager.getAuction()} —
      * đảm bảo mọi thao tác đều xử lý được cache miss (vd: server vừa
      * restart mà client gọi placeBid ngay trước khi cache được warm).
-     *
+     * <p> Áp dụng double-checked locking để đảm bảo duy nhất một luồng
+     * được load từ DB và warm cache.
      * @return Auction object hoặc null nếu không tìm thấy cả trong cache lẫn DB
      */
     private Auction resolveAuction(String auctionId) {
         Auction auction = auctionManager.getAuction(auctionId);
         if (auction != null) return auction;
-        // Cache miss → load từ DB và warm cache
-        Optional<Auction> opt = auctionDao.findById(auctionId);
-        opt.ifPresent(auctionManager::addAuction);
-        return opt.orElse(null);
+
+        ReentrantLock lock = getLock(auctionId);
+        lock.lock();
+        try {
+            if (auction != null) return auction;
+            // Cache miss → load từ DB và warm cache
+            Optional<Auction> opt = auctionDao.findById(auctionId);
+            opt.ifPresent(auctionManager::addAuction);
+            return opt.orElse(null);
+        } finally {
+            lock.unlock(); // Nhả lock
+        }
     }
 }
