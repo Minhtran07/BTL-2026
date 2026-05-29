@@ -25,7 +25,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.locks.ReentrantLock;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 /**
  * Service xử lý nghiệp vụ đấu giá — lớp orchestration trung tâm cho toàn bộ
@@ -72,7 +76,20 @@ public class AuctionService {
      * Đảm bảo tính duy nhất của Object khóa trên RAM cho mỗi phòng đấu giá.
      * Giúp hệ thống không bị nghẽn cổ chai toàn cục (Global Bottleneck).
      */
-    private final ConcurrentHashMap<String, Object> auctionLocks = new ConcurrentHashMap<>();
+    private final Cache<String, ReentrantLock> lockCache = CacheBuilder.newBuilder()
+        .weakValues() // ĐÂY LÀ CHÌA KHÓA: Tự dọn dẹp lock khi không dùng đến nữa
+        .build();
+
+    // Hàm tiện ích để lấy Lock theo Auction ID
+    private ReentrantLock getLock(String auctionId) {
+        try {
+            // Nếu có lock cũ thì trả về, nếu chưa có thì chạy hàm ReentrantLock::new để tạo mới
+            return lockCache.get(auctionId, ReentrantLock::new);
+        } catch (ExecutionException e) {
+            // Phòng hờ lỗi khởi tạo, trả về một lock mới
+            return new ReentrantLock();
+        }
+    }
 
     /** Constructor mặc định (production). */
     public AuctionService() {
@@ -174,17 +191,20 @@ public class AuctionService {
     }
 
     public void startAuctionProactively(String auctionId) {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        ReentrantLock lock = getLock(auctionId);
         boolean isStarted = false;
 
-        synchronized (lock) {
+        lock.lock(); // Thay thế synchronized bằng ReentrantLock từ Guava Cache
+        try {
             Auction auction = resolveAuction(auctionId);
             if (auction != null && auction.getStatus() == AuctionStatus.OPEN) {
-                auction.start();             // OPEN -> RUNNING trên RAM
-                auctionDao.update(auction);  // Lưu xuống SQLite
+                auction.start();
+                auctionDao.update(auction);
                 isStarted = true;
             }
-        } // Nhả khóa phòng nhanh chóng
+        } finally {
+            lock.unlock(); // Luôn luôn giải phóng khóa trong khối finally
+        }
 
         // Bắn event ra ngoài để đẩy qua WebSocket lên GUI realtime!
         if (isStarted) {
@@ -200,13 +220,14 @@ public class AuctionService {
      */
     public BidTransaction placeBid(String auctionId, String bidderId, String bidderName,
                                    double amount) throws InvalidBidException, AuctionClosedException {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        ReentrantLock lock = getLock(auctionId);
 
         Auction auction;
         BidTransaction transaction;
         List<BidTransaction> autoBidResults;
 
-        synchronized (lock) {
+        lock.lock(); // Đảm bảo tại một thời điểm chỉ có 1 thread được đặt cược vào phòng này
+        try {
             auction = resolveAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá: " + auctionId);
@@ -231,6 +252,8 @@ public class AuctionService {
             // Tối ưu: chỉ persist xuống DAO 1 lần sau khi cả burst kết thúc
             autoBidResults = auction.processAutoBids(bidderId);
             auctionDao.update(auction);
+        } finally {
+            lock.unlock();
         }
 
         // Thông báo qua Observer Pattern
@@ -256,12 +279,13 @@ public class AuctionService {
      */
     public void registerAutoBid(String auctionId, String bidderId, String bidderName,
                                 double maxBid, double increment) throws InvalidBidException {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
+        ReentrantLock lock = getLock(auctionId);
 
         Auction auction;
         List<BidTransaction> autoBidResults = List.of();
 
-        synchronized (lock) {
+        lock.lock();
+        try {
             auction = resolveAuction(auctionId);
             if (auction == null) {
                 throw new InvalidBidException("Không tìm thấy phiên đấu giá");
@@ -285,6 +309,8 @@ public class AuctionService {
 
             // Tối ưu: chỉ persist 1 lần sau cả burst.
             auctionDao.update(auction);
+        } finally {
+            lock.unlock();
         }
 
         if (!autoBidResults.isEmpty()) {
@@ -397,16 +423,18 @@ public class AuctionService {
      * <p>Thứ tự: finish() → settleAuction() → dispatch AUCTION_ENDED event.
      */
     public void endAuction(String auctionId) {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
-
+        ReentrantLock lock = getLock(auctionId);
         Auction auction;
 
-        synchronized (lock) {
+        lock.lock();
+        try {
             auction = resolveAuction(auctionId);
             if (auction == null) return;
 
             auction.finish();
             auctionDao.update(auction);
+        } finally {
+            lock.unlock();
         }
 
         // Thực hiện chuyển tiền (trừ người thắng, cộng người bán)
@@ -464,11 +492,11 @@ public class AuctionService {
      * Hủy phiên đấu giá.
      */
     public void cancelAuction(String auctionId) {
-        Object lock = auctionLocks.computeIfAbsent(auctionId, k -> new Object());
-
+        ReentrantLock lock = getLock(auctionId);
         boolean isCanceledSuccessfully = false;
 
-        synchronized (lock) {
+        lock.lock();
+        try {
             Auction auction = resolveAuction(auctionId);
             if (auction != null) {
                 auction.cancel();
@@ -479,6 +507,8 @@ public class AuctionService {
                     auctionId,
                     "Phiên đấu giá đã bị hủy"));
             }
+        } finally {
+            lock.unlock();
         }
         if (isCanceledSuccessfully) {
             eventDispatcher.dispatch(new AuctionEvent(
