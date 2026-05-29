@@ -2,6 +2,8 @@ package com.auction.pattern.singleton;
 
 import com.auction.model.auction.Auction;
 import com.auction.model.auction.AuctionStatus;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,11 +46,10 @@ public class AuctionManager {
     private static volatile AuctionManager instance;
 
     /**
-     * Cache các phiên đấu giá trong RAM.
+     * Cache các phiên đấu giá trong RAM thay cho ConcurrentHashMap.
      * Key = auctionId, Value = Auction object.
-     * Dùng ConcurrentHashMap để thread-safe.
      */
-    private final Map<String, Auction> auctions;
+    private final Cache<String, Auction> auctionCache;
 
     /**
      * Scheduler chạy task định kỳ (kiểm tra phiên hết giờ).
@@ -61,8 +62,11 @@ public class AuctionManager {
      * Khởi tạo map rỗng + scheduler, sau đó bắt đầu task monitor.
      */
     private AuctionManager() {
-        this.auctions = new ConcurrentHashMap<>();
-        this.scheduler = Executors.newScheduledThreadPool(8);
+        // Khởi tạo Guava Cache: Tự động đuổi khứ bản ghi ra khỏi RAM nếu sau 10 phút không ai đọc/ghi
+        this.auctionCache = CacheBuilder.newBuilder()
+            .expireAfterAccess(10, TimeUnit.MINUTES)
+            .build();
+        this.scheduler = Executors.newScheduledThreadPool(2);
     }
 
     /**
@@ -114,36 +118,36 @@ public class AuctionManager {
 
     /** Thêm 1 phiên đấu giá vào cache. */
     public void addAuction(Auction auction) {
-        auctions.put(auction.getId(), auction);
+        auctionCache.put(auction.getId(), auction);
     }
 
     /** Lấy 1 phiên theo id (null nếu không có). */
     public Auction getAuction(String auctionId) {
-        return auctions.get(auctionId);
+        return auctionCache.getIfPresent(auctionId);
     }
 
     /** Xóa phiên khỏi cache (vd khi seller hủy). */
     public void removeAuction(String auctionId) {
-        auctions.remove(auctionId);
+        auctionCache.invalidate(auctionId);
     }
 
     /** Lấy tất cả phiên - trả về list immutable (an toàn). */
     public List<Auction> getAllAuctions() {
-        return List.copyOf(auctions.values());
+        return List.copyOf(auctionCache.asMap().values());
     }
 
     /** Lấy chỉ các phiên đang RUNNING (dùng cho list màn hình chính). */
     public List<Auction> getActiveAuctions() {
-        return auctions.values().stream()
-                .filter(a -> a.getStatus() == AuctionStatus.RUNNING)
-                .collect(Collectors.toList());
+        return auctionCache.asMap().values().stream()
+            .filter(a -> a.getStatus() == AuctionStatus.RUNNING)
+            .collect(Collectors.toList());
     }
 
-    /** Lấy các phiên của 1 seller cụ thể. */
+    /** Lấy các phiên của 1 seller cụ thể trên RAM. */
     public List<Auction> getAuctionsBySeller(String sellerId) {
-        return auctions.values().stream()
-                .filter(a -> a.getSellerId().equals(sellerId))
-                .collect(Collectors.toList());
+        return auctionCache.asMap().values().stream()
+            .filter(a -> a.getSellerId().equals(sellerId))
+            .collect(Collectors.toList());
     }
 
     /**
