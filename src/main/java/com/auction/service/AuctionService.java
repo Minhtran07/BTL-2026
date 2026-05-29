@@ -157,19 +157,19 @@ public class AuctionService {
 
         Auction auction = new Auction(itemId, sellerId, itemName, startingPrice, startTime, endTime);
 
-        // Tự động bắt đầu nếu đã quá thời gian bắt đầu
-        if (LocalDateTime.now().isAfter(startTime)) {
-            auction.start();
-        }
-
         // 1. CÀI BÁO THỨC MỞ PHÒNG bằng Lambda
         long startDelay = java.time.Duration.between(LocalDateTime.now(), startTime).toSeconds();
         if (startDelay > 0) {
             // Ta bảo Manager: "Đến giờ thì tự chạy hàm startAuctionProactively(auctionId) của tôi nhé"
             auctionManager.scheduleAuctionStart(startDelay, () -> this.startAuctionProactively(auction.getId()));
         } else {
-            auction.start();
-            auctionDao.update(auction);
+            ReentrantLock lock = getLock(auction.getId());
+            lock.lock();
+            try {
+                auction.start();
+            } finally {
+                lock.unlock();
+            }
         }
 
         // 2. CÀI BÁO THỨC ĐÓNG PHÒNG bằng Lambda
@@ -469,25 +469,15 @@ public class AuctionService {
         double saleAmount = auction.getCurrentHighestBid();
 
         // --- Trừ tiền người thắng ---
-        userService.findById(winnerId).ifPresent(winnerUser -> {
-            if (winnerUser instanceof Bidder bidder) {
-                boolean deducted = bidder.deductBalance(saleAmount);
-                if (!deducted) {
-                    System.err.printf("[Settlement] Cảnh báo: Bidder %s không đủ số dư (%.2f) " +
-                            "cho phiên %s%n", bidder.getUsername(), saleAmount, auction.getId());
-                    // Vẫn ghi nhận giao dịch; trong hệ thống thực cần xử lý thêm
-                }
-                userService.updateUser(bidder);
-            }
-        });
+        boolean deducted = userService.deductBidderBalance(winnerId, saleAmount);
+        if (!deducted) {
+            System.err.printf("[Settlement] Cảnh báo: Bidder %s không đủ số dư (%.2f) " +
+                "cho phiên %s%n",  auction.getCurrentHighestBidderName(), saleAmount, auction.getId());
+            // Vẫn ghi nhận giao dịch; trong hệ thống thực cần xử lý thêm
+        }
 
         // --- Cộng doanh thu người bán ---
-        userService.findById(auction.getSellerId()).ifPresent(sellerUser -> {
-            if (sellerUser instanceof Seller seller) {
-                seller.addRevenue(saleAmount);
-                userService.updateUser(seller);
-            }
-        });
+        userService.addSellerRevenue(auction.getSellerId(), saleAmount);
     }
 
     /**
@@ -513,6 +503,7 @@ public class AuctionService {
             lock.unlock();
         }
         if (isCanceledSuccessfully) {
+            auctionManager.removeAuction(auctionId);
             eventDispatcher.dispatch(new AuctionEvent(
                 AuctionEvent.EventType.AUCTION_CANCELED,
                 auctionId,
@@ -548,7 +539,6 @@ public class AuctionService {
         ReentrantLock lock = getLock(auctionId);
         lock.lock();
         try {
-            if (auction != null) return auction;
             // Cache miss → load từ DB và warm cache
             Optional<Auction> opt = auctionDao.findById(auctionId);
             opt.ifPresent(auctionManager::addAuction);
