@@ -5,10 +5,7 @@ import com.auction.model.auction.AuctionStatus;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -37,13 +34,13 @@ import java.util.stream.Collectors;
  * an toàn cho việc đọc/ghi song song mà không cần lock toàn bộ.
  *
  */
-public class AuctionManager {
+public class AuctionRegistry {
 
     /**
      * Instance Singleton.
      * <b>volatile</b> đảm bảo các thread nhìn thấy giá trị mới nhất (memory visibility).
      */
-    private static volatile AuctionManager instance;
+    private static volatile AuctionRegistry instance;
 
     /**
      * Cache các phiên đấu giá trong RAM thay cho ConcurrentHashMap.
@@ -61,7 +58,7 @@ public class AuctionManager {
      * Constructor PRIVATE - đặc trưng Singleton.
      * Khởi tạo map rỗng + scheduler, sau đó bắt đầu task monitor.
      */
-    private AuctionManager() {
+    private AuctionRegistry() {
         // Khởi tạo Guava Cache: Tự động đuổi khứ bản ghi ra khỏi RAM nếu sau 10 phút không ai đọc/ghi
         this.auctionCache = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
@@ -79,11 +76,11 @@ public class AuctionManager {
      *   <li>Lần 2 (trong lock): kiểm tra lại để tránh 2 thread cùng tạo instance</li>
      * </ul>
      */
-    public static AuctionManager getInstance() {
+    public static AuctionRegistry getInstance() {
         if (instance == null) {
-            synchronized (AuctionManager.class) {
+            synchronized (AuctionRegistry.class) {
                 if (instance == null) {
-                    instance = new AuctionManager();
+                    instance = new AuctionRegistry();
                 }
             }
         }
