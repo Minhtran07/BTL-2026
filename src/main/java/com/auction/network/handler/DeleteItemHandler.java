@@ -21,6 +21,16 @@ import java.util.Optional;
  *   <li>Không được xóa item đang có phiên đấu giá tham chiếu
  *       (vi phạm FOREIGN KEY)</li>
  * </ul>
+ *
+ * <p><b>FIX lỗi FOREIGN KEY:</b> Bảng {@code auctions} có
+ * {@code FOREIGN KEY (item_id) REFERENCES items(id)} KHÔNG có
+ * {@code ON DELETE CASCADE}. Nếu cố xóa item mà vẫn còn auction
+ * tham chiếu → SQLite ném exception. Handler kiểm tra trước bằng cách
+ * scan {@code getAllAuctions()} để tìm auction có cùng itemId.
+ * Nếu tìm thấy → trả lỗi yêu cầu hủy phiên trước.
+ *
+ * <p><b>Refactoring:</b> Dùng {@code instanceof DeleteItemRequest req}
+ * (pattern matching Java 16+) thay cho data map.
  */
 public class DeleteItemHandler implements RequestHandler {
 

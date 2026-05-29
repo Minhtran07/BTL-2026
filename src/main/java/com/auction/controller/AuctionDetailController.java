@@ -117,6 +117,10 @@ public class AuctionDetailController {
         }
     };
 
+    /**
+     * FXML initialize — gắn formatter cho tất cả ô nhập tiền.
+     * Gọi tự động bởi FXMLLoader sau khi inject @FXML fields.
+     */
     @FXML
     private void initialize() {
         attachThousandSeparatorFormatter(bidAmountField);
@@ -124,6 +128,19 @@ public class AuctionDetailController {
         attachThousandSeparatorFormatter(incrementField);
     }
 
+    /**
+     * Gắn listener tự format số tiền có dấu phân cách hàng nghìn (1,000,000).
+     *
+     * <p><b>Thuật toán giữ vị trí caret:</b>
+     * <ol>
+     *   <li>Đếm số digit trước caret hiện tại</li>
+     *   <li>Strip tất cả ký tự không phải digit</li>
+     *   <li>Format lại với dấu phẩy (Locale.US)</li>
+     *   <li>Đặt caret về vị trí tương ứng (đếm lại digit)</li>
+     * </ol>
+     * Nhờ vậy user gõ "1000000" → tự hiển thị "1,000,000" mà cursor
+     * không nhảy lung tung.
+     */
     private void attachThousandSeparatorFormatter(TextField field) {
         if (field == null) return;
         field.textProperty().addListener((obs, oldVal, newVal) -> {
@@ -157,6 +174,10 @@ public class AuctionDetailController {
         });
     }
 
+    /**
+     * Được gọi từ DashboardController khi user click vào 1 phiên.
+     * Khởi tạo toàn bộ: subscribe push, load data, start countdown.
+     */
     public void setAuctionId(String auctionId) {
         this.auctionId = auctionId;
         auctionClientService.addPushListener(serverListener);
@@ -182,6 +203,13 @@ public class AuctionDetailController {
         }
     }
 
+    /**
+     * Đổ dữ liệu auction vào các UI component.
+     *
+     * <p>Bao gồm: thông tin item, trạng thái phiên (badge CSS động),
+     * giá hiện tại, người dẫn đầu, lịch sử bid, biểu đồ giá,
+     * và gợi ý giá bid (+5% giá hiện tại).
+     */
     private void loadAuctionData() {
         if (currentAuction == null) return;
         Auction auction = currentAuction;
@@ -231,6 +259,10 @@ public class AuctionDetailController {
         }
     }
 
+    /**
+     * Cập nhật ListView lịch sử bid — hiển thị theo thứ tự mới nhất trước.
+     * Format: [HH:mm:ss] TênNgười — 1,000,000 VNĐ
+     */
     private void updateBidHistory(Auction auction) {
         ObservableList<String> items = FXCollections.observableArrayList();
         List<BidTransaction> history = auction.getBidHistory();
@@ -319,6 +351,11 @@ public class AuctionDetailController {
         }
     }
 
+    /**
+     * Tính hash fingerprint của bid history — dùng để so sánh nhanh
+     * xem data có thay đổi không. Nếu fingerprint giống → skip rebuild chart
+     * (tránh flickering khi sync timer reload data nhưng không có bid mới).
+     */
     private String computeHistoryFingerprint(List<BidTransaction> history) {
         if (history.isEmpty()) return "0";
         int hash = 1;
@@ -329,6 +366,11 @@ public class AuctionDetailController {
         return history.size() + ":" + hash;
     }
 
+    /**
+     * Khởi chạy timer đếm ngược thời gian còn lại của phiên.
+     * Timer chạy mỗi giây trên daemon thread, update UI qua Platform.runLater.
+     * Tự cancel khi phiên FINISHED.
+     */
     private void startCountdown() {
         countdownTimer = new Timer(true);
         countdownTimer.scheduleAtFixedRate(new TimerTask() {
@@ -358,6 +400,12 @@ public class AuctionDetailController {
         }, 0, 1000);
     }
 
+    /**
+     * Xử lý nút "Đặt giá" — gửi PlaceBidRequest lên server.
+     *
+     * <p>Flow: strip formatting (dấu phẩy) → parse double → gọi service
+     * → hiện thông báo thành công/lỗi → reload data.
+     */
     @FXML
     private void handlePlaceBid() {
         hideBidMessages();
@@ -383,11 +431,17 @@ public class AuctionDetailController {
         }
     }
 
+    /** Loại bỏ dấu phẩy, khoảng trắng... chỉ giữ lại digits để parse số. */
     private String stripFormatting(String text) {
         if (text == null) return "";
         return text.replaceAll("\\D", "");
     }
 
+    /**
+     * Xử lý nút "Bật Auto-Bid" — đăng ký auto-bid cho phiên hiện tại.
+     * Server sẽ tự đặt giá mỗi khi có người bid cao hơn, cho đến khi
+     * đạt maxBid hoặc phiên kết thúc.
+     */
     @FXML
     private void handleAutoBid() {
         hideBidMessages();
@@ -418,12 +472,21 @@ public class AuctionDetailController {
         }
     }
 
+    /** Quay về Dashboard — cleanup resources trước khi navigate. */
     @FXML
     private void handleBack() {
         cleanup();
         MainApp.navigateTo("/com/auction/view/dashboard.fxml", "Trang chủ");
     }
 
+    /**
+     * Giải phóng resources khi rời màn hình:
+     * <ol>
+     *   <li>Cancel countdown timer (tránh memory leak)</li>
+     *   <li>Remove push listener (tránh ghost updates)</li>
+     *   <li>Unsubscribe auction trên server (giảm tải push traffic)</li>
+     * </ol>
+     */
     private void cleanup() {
         if (countdownTimer != null) {
             countdownTimer.cancel();

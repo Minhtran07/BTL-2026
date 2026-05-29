@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.auction.controller.FinanceController"
+            prefWidth="1100" prefHeight="750"
+            styleClass="root">
+
+    <!-- Navigation Bar -->
+    <top>
+        <HBox styleClass="nav-bar" alignment="CENTER_LEFT" spacing="16">
+            <Label text="🏷 Đấu giá Trực tuyến" style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="← Quay lại Dashboard" styleClass="nav-button" onAction="#handleBackToDashboard"/>
+            <Separator orientation="VERTICAL" style="-fx-border-color: rgba(255,255,255,0.3);"/>
+            <Label fx:id="userInfoLabel" style="-fx-text-fill: #d5e8f0; -fx-font-size: 13px;"/>
+        </HBox>
+    </top>
+
+    <!-- Main Content -->
+    <center>
+        <VBox spacing="20">
+            <padding><Insets top="24" right="32" bottom="24" left="32"/></padding>
+
+            <!-- Page Title -->
+            <Label text="Thông tin Tài chính" styleClass="section-title"
+                   style="-fx-font-size: 22px;"/>
+
+            <!-- Summary Cards -->
+            <HBox fx:id="summaryBox" spacing="20" alignment="CENTER_LEFT">
+                <!-- Card 1: Role -->
+                <VBox styleClass="card" spacing="6" prefWidth="220">
+                    <Label text="Vai trò" style="-fx-text-fill: #888; -fx-font-size: 12px;"/>
+                    <Label fx:id="lblRole" style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;"/>
+                </VBox>
+
+                <!-- Card 2: Balance / Revenue -->
+                <VBox styleClass="card" spacing="6" prefWidth="280">
+                    <Label fx:id="lblFinanceTitle" text="Số dư" style="-fx-text-fill: #888; -fx-font-size: 12px;"/>
+                    <Label fx:id="lblFinanceValue" style="-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #e67e22;"/>
+                </VBox>
+
+                <!-- Card 3: Stats -->
+                <VBox styleClass="card" spacing="6" prefWidth="250">
+                    <Label fx:id="lblStatsTitle" text="Thống kê" style="-fx-text-fill: #888; -fx-font-size: 12px;"/>
+                    <Label fx:id="lblStatsValue" style="-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #2980b9;"/>
+                </VBox>
+
+                <!-- Refresh button -->
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="🔄 Làm mới" styleClass="btn-primary" onAction="#handleRefresh"
+                        style="-fx-padding: 10 20 10 20;"/>
+            </HBox>
+
+            <!-- Transaction History Table -->
+            <Label text="Lịch sử giao dịch" styleClass="section-title" style="-fx-font-size: 16px;"/>
+
+            <TableView fx:id="transactionTable" VBox.vgrow="ALWAYS" styleClass="table-view">
+                <columns>
+                    <TableColumn fx:id="colTime" text="Thời gian" prefWidth="160"/>
+                    <TableColumn fx:id="colAuction" text="Phiên đấu giá" prefWidth="200"/>
+                    <TableColumn fx:id="colType" text="Loại" prefWidth="120"/>
+                    <TableColumn fx:id="colAmount" text="Số tiền" prefWidth="150"/>
+                    <TableColumn fx:id="colBalance" text="Biến động" prefWidth="150"/>
+                    <TableColumn fx:id="colNote" text="Ghi chú" prefWidth="180"/>
+                </columns>
+                <placeholder>
+                    <Label text="Chưa có giao dịch nào" style="-fx-text-fill: #888;"/>
+                </placeholder>
+            </TableView>
+
+            <!-- Status label -->
+            <Label fx:id="statusLabel" style="-fx-text-fill: #888; -fx-font-size: 12px;"/>
+        </VBox>
+    </center>
+</BorderPane>

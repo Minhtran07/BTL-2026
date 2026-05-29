@@ -181,6 +181,14 @@ public class AuctionClientService {
         return body != null ? body : List.of();
     }
 
+    // ========== USER INFO ==========
+
+    /** Lấy thông tin user mới nhất từ server (balance/revenue fresh từ DB). */
+    public User getUserInfo() throws IOException {
+        Message resp = client.sendRequest(new GetUserInfoRequest());
+        return ensureSuccess(resp);
+    }
+
     // ========== ADMIN ==========
 
     public List<User> getAllUsers() throws IOException {
