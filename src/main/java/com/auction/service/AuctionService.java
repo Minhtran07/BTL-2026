@@ -16,7 +16,7 @@ import com.auction.model.user.Seller;
 import com.auction.pattern.factory.ItemFactory;
 import com.auction.pattern.observer.AuctionEvent;
 import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.singleton.AuctionManager;
+import com.auction.pattern.singleton.AuctionRegistry;
 import com.auction.pattern.strategy.BidValidationStrategy;
 import com.auction.pattern.strategy.StandardBidValidation;
 
@@ -36,7 +36,7 @@ import com.google.common.cache.CacheBuilder;
  * vòng đời phiên đấu giá (tạo, đặt giá, auto-bid, kết thúc, thanh toán, huỷ).
  *
  * <p><b>Vai trò:</b> đóng vai trò facade giữa tầng UI/controller và tầng
- * domain/DAO. Service không tự cache state mà uỷ thác cho {@link AuctionManager}
+ * domain/DAO. Service không tự cache state mà uỷ thác cho {@link AuctionRegistry}
  * (singleton in-memory) và DAO ({@link AuctionDaoImpl}).
  *
  * <p><b>Tích hợp design patterns:</b>
@@ -45,7 +45,7 @@ import com.google.common.cache.CacheBuilder;
  *   <li><b>Strategy</b> — {@link BidValidationStrategy} cho luật validate bid</li>
  *   <li><b>Observer</b> — {@link AuctionEventDispatcher} broadcast các sự kiện
  *       NEW_BID / AUTO_BID / AUCTION_STARTED / AUCTION_ENDED / AUCTION_CANCELED</li>
- *   <li><b>Singleton</b> — {@link AuctionManager}, {@link AuctionEventDispatcher}</li>
+ *   <li><b>Singleton</b> — {@link AuctionRegistry}, {@link AuctionEventDispatcher}</li>
  * </ul>
  *
  * <p><b>Thanh toán (settlement):</b> Khi {@link #endAuction(String)} được gọi,
@@ -67,7 +67,7 @@ public class AuctionService {
     private final GenericDao<Item>    itemDao;
     private final GenericDao<Auction> auctionDao;
     private final UserService         userService;
-    private final AuctionManager      auctionManager;
+    private final AuctionRegistry auctionRegistry;
     private final AuctionEventDispatcher eventDispatcher;
     private final BidValidationStrategy  bidValidator;
 
@@ -96,7 +96,7 @@ public class AuctionService {
         this.itemDao        = new ItemDaoImpl();
         this.auctionDao     = new AuctionDaoImpl();
         this.userService    = new UserService();
-        this.auctionManager = AuctionManager.getInstance();
+        this.auctionRegistry = AuctionRegistry.getInstance();
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator   = new StandardBidValidation();
     }
@@ -118,7 +118,7 @@ public class AuctionService {
         this.itemDao         = itemDao;
         this.auctionDao      = auctionDao;
         this.userService     = userService;
-        this.auctionManager  = AuctionManager.getInstance();
+        this.auctionRegistry = AuctionRegistry.getInstance();
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator    = new StandardBidValidation();
     }
@@ -161,7 +161,7 @@ public class AuctionService {
         long startDelay = java.time.Duration.between(LocalDateTime.now(), startTime).toSeconds();
         if (startDelay > 0) {
             // Ta bảo Manager: "Đến giờ thì tự chạy hàm startAuctionProactively(auctionId) của tôi nhé"
-            auctionManager.scheduleAuctionStart(startDelay, () -> this.startAuctionProactively(auction.getId()));
+            auctionRegistry.scheduleAuctionStart(startDelay, () -> this.startAuctionProactively(auction.getId()));
         } else {
             ReentrantLock lock = getLock(auction.getId());
             lock.lock();
@@ -176,11 +176,11 @@ public class AuctionService {
         long endDelay = java.time.Duration.between(LocalDateTime.now(), endTime).toSeconds();
         if (endDelay > 0) {
             // Ta bảo Manager: "Đến giờ thì tự gọi hàm endAuction(auctionId) của tôi"
-            auctionManager.scheduleAuctionEnd(endDelay, () -> this.endAuction(auction.getId()));
+            auctionRegistry.scheduleAuctionEnd(endDelay, () -> this.endAuction(auction.getId()));
         }
 
         auctionDao.save(auction);
-        auctionManager.addAuction(auction);
+        auctionRegistry.addAuction(auction);
 
         eventDispatcher.dispatch(new AuctionEvent(
                 AuctionEvent.EventType.AUCTION_STARTED,
@@ -335,7 +335,7 @@ public class AuctionService {
      * khi thực sự cần, thay vì preload toàn bộ.
      */
     public Optional<Auction> getAuction(String auctionId) {
-        Auction cached = auctionManager.getAuction(auctionId);
+        Auction cached = auctionRegistry.getAuction(auctionId);
         if (cached != null) return Optional.of(cached);
         // Cache miss → fallback DB và warm cache
         return getFreshAuction(auctionId);
@@ -347,7 +347,7 @@ public class AuctionService {
      */
     public Optional<Auction> getFreshAuction(String auctionId) {
         Optional<Auction> opt = auctionDao.findById(auctionId);
-        opt.ifPresent(auctionManager::addAuction); // warm cache
+        opt.ifPresent(auctionRegistry::addAuction); // warm cache
         return opt;
     }
 
@@ -363,7 +363,7 @@ public class AuctionService {
         List<Auction> fromDb = auctionDao.findAll();
         List<Auction> result = new ArrayList<>(fromDb.size());
         for (Auction dbAuction : fromDb) {
-            Auction cached = auctionManager.getAuction(dbAuction.getId());
+            Auction cached = auctionRegistry.getAuction(dbAuction.getId());
             if (cached != null) {
                 // Bản cache mới hơn cho phiên active → ưu tiên
                 result.add(cached);
@@ -372,7 +372,7 @@ public class AuctionService {
                 // Warm cache nếu phiên đang active mà chưa có trong cache
                 if (dbAuction.getStatus() == AuctionStatus.OPEN
                         || dbAuction.getStatus() == AuctionStatus.RUNNING) {
-                    auctionManager.addAuction(dbAuction);
+                    auctionRegistry.addAuction(dbAuction);
                 }
             }
         }
@@ -387,22 +387,22 @@ public class AuctionService {
      * tiếp theo sẽ hit cache trực tiếp (O(n) filter trên ConcurrentHashMap).
      */
     public List<Auction> getActiveAuctions() {
-        List<Auction> cached = auctionManager.getActiveAuctions();
+        List<Auction> cached = auctionRegistry.getActiveAuctions();
         if (!cached.isEmpty()) return cached;
         // Cache cold → warm từ DB
         warmCacheFromDb();
-        return auctionManager.getActiveAuctions();
+        return auctionRegistry.getActiveAuctions();
     }
 
     /**
      * Lấy các phiên của 1 seller — cache-first, warm từ DB nếu cache rỗng.
      */
     public List<Auction> getAuctionsBySeller(String sellerId) {
-        List<Auction> cached = auctionManager.getAuctionsBySeller(sellerId);
+        List<Auction> cached = auctionRegistry.getAuctionsBySeller(sellerId);
         if (!cached.isEmpty()) return cached;
         // Cache cold → warm từ DB rồi thử lại
         warmCacheFromDb();
-        return auctionManager.getAuctionsBySeller(sellerId);
+        return auctionRegistry.getAuctionsBySeller(sellerId);
     }
 
     /**
@@ -412,7 +412,7 @@ public class AuctionService {
     private void warmCacheFromDb() {
         for (Auction a : auctionDao.findAll()) {
             if (a.getStatus() == AuctionStatus.OPEN || a.getStatus() == AuctionStatus.RUNNING) {
-                auctionManager.addAuction(a);
+                auctionRegistry.addAuction(a);
             }
         }
     }
@@ -440,7 +440,7 @@ public class AuctionService {
         // Thực hiện chuyển tiền (trừ người thắng, cộng người bán)
         settleAuction(auction);
         // Settle tiền xong xuôi thì đuổi hẳn Object khỏi RAM (Cache)
-        auctionManager.removeAuction(auctionId);
+        auctionRegistry.removeAuction(auctionId);
 
         eventDispatcher.dispatch(new AuctionEvent(
             AuctionEvent.EventType.AUCTION_ENDED,
@@ -503,7 +503,7 @@ public class AuctionService {
             lock.unlock();
         }
         if (isCanceledSuccessfully) {
-            auctionManager.removeAuction(auctionId);
+            auctionRegistry.removeAuction(auctionId);
             eventDispatcher.dispatch(new AuctionEvent(
                 AuctionEvent.EventType.AUCTION_CANCELED,
                 auctionId,
@@ -533,7 +533,7 @@ public class AuctionService {
      * @return Auction object hoặc null nếu không tìm thấy cả trong cache lẫn DB
      */
     private Auction resolveAuction(String auctionId) {
-        Auction auction = auctionManager.getAuction(auctionId);
+        Auction auction = auctionRegistry.getAuction(auctionId);
         if (auction != null) return auction;
 
         ReentrantLock lock = getLock(auctionId);
@@ -541,7 +541,7 @@ public class AuctionService {
         try {
             // Cache miss → load từ DB và warm cache
             Optional<Auction> opt = auctionDao.findById(auctionId);
-            opt.ifPresent(auctionManager::addAuction);
+            opt.ifPresent(auctionRegistry::addAuction);
             return opt.orElse(null);
         } finally {
             lock.unlock(); // Nhả lock
