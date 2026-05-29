@@ -439,6 +439,8 @@ public class AuctionService {
 
         // Thực hiện chuyển tiền (trừ người thắng, cộng người bán)
         settleAuction(auction);
+        // Settle tiền xong xuôi thì đuổi hẳn Object khỏi RAM (Cache)
+        auctionManager.removeAuction(auctionId);
 
         eventDispatcher.dispatch(new AuctionEvent(
             AuctionEvent.EventType.AUCTION_ENDED,
