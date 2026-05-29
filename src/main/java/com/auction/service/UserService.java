@@ -5,9 +5,13 @@ import com.auction.dao.UserDaoImpl;
 import com.auction.exception.AuthenticationException;
 import com.auction.model.user.*;
 import com.auction.util.PasswordUtils;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * ============================================================================
@@ -44,6 +48,24 @@ public class UserService {
      * Constructor mặc định - dùng trong production.
      * Tự tạo UserDaoImpl (SQLite).
      */
+    /**
+     * BẢN ĐỒ Ổ KHÓA THEO USER ID:
+     * Đảm bảo tính duy nhất của Object khóa trên RAM cho mỗi User.
+     * User nào chạy giao dịch tài chính thì chỉ khóa đúng User đó, không chặn chéo người khác.
+     */
+    private final Cache<String, ReentrantLock> userLockCache = CacheBuilder.newBuilder()
+        .weakValues() // Tự giải phóng khóa khỏi RAM khi User hết giao dịch và không luồng nào giữ
+        .build();
+
+    // Hàm tiện ích nội bộ để lấy Lock theo User ID
+    private ReentrantLock getUserLock(String userId) {
+        try {
+            return userLockCache.get(userId, ReentrantLock::new);
+        } catch (ExecutionException e) {
+            return new ReentrantLock();
+        }
+    }
+
     public UserService() {
         this.userDao = new UserDaoImpl();
     }
@@ -196,5 +218,50 @@ public class UserService {
         User user = userOpt.get();
         user.setActive(false);
         userDao.update(user);
+    }
+
+    // ==================== Nghiệp vụ Tài chính (Thread-safe) ====================
+
+    /**
+     * Khấu trừ số dư của Bidder một cách an toàn luồng độc lập.
+     * * @param userId ID của Bidder cần trừ tiền
+     * @param amount Số tiền cần khấu trừ
+     * @return true nếu trừ tiền thành công, false nếu không đủ số dư hoặc lỗi thực thể
+     */
+    public boolean deductBidderBalance(String userId, double amount) {
+        ReentrantLock lock = getUserLock(userId);
+        lock.lock();
+        try {
+            Optional<User> opt = userDao.findById(userId);
+            if (opt.isPresent() && opt.get() instanceof Bidder bidder) {
+                boolean success = bidder.deductBalance(amount);
+                if (success) {
+                    userDao.update(bidder); // Đồng bộ xuống DB (File/SQLite)
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Cộng doanh thu cho Seller một cách an toàn luồng độc lập.
+     * * @param userId ID của Seller được nhận tiền
+     * @param amount Số tiền cộng vào doanh thu
+     */
+    public void addSellerRevenue(String userId, double amount) {
+        ReentrantLock lock = getUserLock(userId);
+        lock.lock();
+        try {
+            Optional<User> opt = userDao.findById(userId);
+            if (opt.isPresent() && opt.get() instanceof Seller seller) {
+                seller.addRevenue(amount);
+                userDao.update(seller); // Đồng bộ xuống DB (File/SQLite)
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 }
