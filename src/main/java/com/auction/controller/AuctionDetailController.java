@@ -20,6 +20,8 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
+import javafx.util.StringConverter;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -247,15 +249,14 @@ public class AuctionDetailController {
     /**
      * Cập nhật biểu đồ giá theo diễn biến bid.
      *
-     * <p><b>FIX "mất toạ độ":</b> JavaFX LineChart + CategoryAxis có bug khi
-     * gọi {@code getData().clear()} rồi add series mới — CategoryAxis mất
-     * tick labels (trục X trống trơn). Nguyên nhân: auto-ranging xoá danh
-     * sách category nội bộ khi data bị clear, nhưng không tái tạo khi data
-     * mới được add vào.
-     *
-     * <p>Giải pháp: tắt auto-ranging trên xAxis, tự quản lý danh sách
-     * categories thủ công → đảm bảo trục X luôn hiển thị đầy đủ nhãn.
-     * Đồng thời xoay nhãn 45° khi có nhiều bid để tránh chồng chéo.
+     * <p><b>FIX "mất toạ độ":</b>
+     * <ul>
+     *   <li>CategoryAxis: tắt autoRanging, set categories thủ công để trục X
+     *       không mất tick labels khi clear/re-add data</li>
+     *   <li>NumberAxis: custom formatter hiển thị giá dạng "1,000,000" thay vì
+     *       "1000000.0" mặc định</li>
+     *   <li>Tooltip trên mỗi data point: hover hiển thị thời gian + giá cụ thể</li>
+     * </ul>
      */
     private void updatePriceChart(Auction auction) {
         List<BidTransaction> history = auction.getBidHistory();
@@ -266,6 +267,16 @@ public class AuctionDetailController {
                 && currentFingerprint.equals(lastChartFingerprint)) {
             return;
         }
+
+        // Format trục Y hiển thị giá tiền có dấu phân cách hàng nghìn
+        yAxis.setTickLabelFormatter(new StringConverter<>() {
+            @Override
+            public String toString(Number value) {
+                return String.format("%,.0f", value.doubleValue());
+            }
+            @Override
+            public Number fromString(String string) { return 0; }
+        });
 
         XYChart.Series<String, Number> newSeries = new XYChart.Series<>();
         newSeries.setName("Giá đấu");
@@ -287,15 +298,25 @@ public class AuctionDetailController {
             newSeries.getData().add(new XYChart.Data<>(label, tx.getBidAmount()));
         }
 
-        // Fix: set categories thủ công để CategoryAxis không mất tick labels
+        // Set categories thủ công để CategoryAxis không mất tick labels
         xAxis.setAutoRanging(false);
         xAxis.setCategories(FXCollections.observableArrayList(categories));
-        xAxis.setTickLabelRotation(categories.size() > 6 ? -45 : 0);
 
         priceChart.getData().clear();
         priceChart.getData().add(newSeries);
         priceSeries = newSeries;
         lastChartFingerprint = currentFingerprint;
+
+        // Gắn Tooltip cho mỗi data point — hover để xem thời gian + giá cụ thể
+        for (XYChart.Data<String, Number> data : newSeries.getData()) {
+            if (data.getNode() != null) {
+                String tooltipText = data.getXValue() + "\n"
+                        + String.format("%,.0f VNĐ", data.getYValue().doubleValue());
+                Tooltip tooltip = new Tooltip(tooltipText);
+                tooltip.setStyle("-fx-font-size: 13px;");
+                Tooltip.install(data.getNode(), tooltip);
+            }
+        }
     }
 
     private String computeHistoryFingerprint(List<BidTransaction> history) {
