@@ -3,6 +3,7 @@ package com.auction.network.client;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
 import com.auction.network.message.push.PushMessage;
+import com.auction.network.message.request.Request;
 
 import java.io.*;
 import java.net.Socket;
@@ -76,7 +77,7 @@ public class AuctionClient {
    * Dùng 'volatile' để thao tác thread-safe:
    * thread sendRequest set, thread listener complete.
    */
-  private volatile CompletableFuture<Message> pendingResponse = null;
+  private volatile CompletableFuture<Response<?>> pendingResponse = null;
 
   /**
    * Callback xử lý push event (PushMessage subclass).
@@ -224,9 +225,9 @@ public class AuctionClient {
           if (pushHandler != null) {
             pushHandler.accept((PushMessage) message);
           }
-        } else {
+        } else if (message instanceof Response<?>) {
           if (pendingResponse != null) {
-              pendingResponse.complete(message);
+              pendingResponse.complete((Response<?>) message);
           } else {
             System.err.println("[Client] Nhận phản hồi nhưng không có request đang chờ: "
                     + message.getClass().getSimpleName());
@@ -249,7 +250,7 @@ public class AuctionClient {
     // ===== CLEANUP =====
     connected = false;
     // Nếu có future đang chờ → fail nó để caller không block vô hạn
-    CompletableFuture<Message> pending = pendingResponse;
+    CompletableFuture<Response<?>> pending = pendingResponse;
     pendingResponse = null;
     if (pending != null) {
       pending.completeExceptionally(new IOException("Kết nối bị đóng"));
