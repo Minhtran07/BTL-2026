@@ -1,8 +1,6 @@
-package com.auction.network.server;
+package com.auction.network.message.push;
 
 import com.auction.network.message.Message;
-import com.auction.network.message.push.AuctionEventPush;
-import com.auction.network.message.push.BidUpdatePush;
 import com.auction.pattern.observer.AuctionEvent;
 import com.auction.pattern.observer.AuctionObserver;
 
@@ -37,7 +35,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   <li>CopyOnWriteArrayList: an toàn cho iteration trong khi có add/remove</li>
  * </ul>
  */
-public class PushForwarder implements AuctionObserver {
+public class PushBroadcaster implements AuctionObserver {
     /**
      * Map: auctionId → list các PushListener đang subscribe phiên đó.
      *
@@ -46,7 +44,7 @@ public class PushForwarder implements AuctionObserver {
      */
     private final Map<String, List<PushListener>> subscriptions;
 
-    public PushForwarder() {
+    public PushBroadcaster() {
         subscriptions = new ConcurrentHashMap<>();
     }
 

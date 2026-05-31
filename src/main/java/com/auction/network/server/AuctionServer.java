@@ -3,6 +3,8 @@ package com.auction.network.server;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.push.PushBroadcaster;
+import com.auction.network.message.push.PushListener;
 import com.auction.network.message.request.*;
 import com.auction.network.handler.*;
 import com.auction.service.AuctionService;
@@ -38,7 +40,7 @@ import java.util.concurrent.*;
  *
  * <p><b>OBSERVER PATTERN per-auction subscription:</b>
  * Mỗi {@link ClientHandler} là 1 {@link PushListener}. Khi client gửi
- * {@link SubscribeAuctionRequest}, handler đăng ký vào {@link PushForwarder}.
+ * {@link SubscribeAuctionRequest}, handler đăng ký vào {@link PushBroadcaster}.
  * Khi có event → forwarder chỉ gửi cho các client đã subscribe đúng phiên đó
  * (không broadcast tất cả → tiết kiệm bandwidth).
  *
@@ -63,7 +65,7 @@ public class AuctionServer {
      */
     private final ExecutorService threadPool;
     /** Forwarder push event - Singleton chia sẻ cho mọi handler. */
-    private final PushForwarder forwarder = new PushForwarder();
+    private final PushBroadcaster forwarder = new PushBroadcaster();
 
     /**
      * Danh sách client handler đang kết nối.
@@ -194,7 +196,7 @@ public class AuctionServer {
      * <p>Implements:
      * <ul>
      *   <li>{@link Runnable} - chạy trong thread pool</li>
-     *   <li>{@link PushListener} - nhận event từ {@link PushForwarder}</li>
+     *   <li>{@link PushListener} - nhận event từ {@link PushBroadcaster}</li>
      * </ul>
      *
      * <p>Mỗi handler:
