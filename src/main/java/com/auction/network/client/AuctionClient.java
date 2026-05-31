@@ -1,6 +1,7 @@
 package com.auction.network.client;
 
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.network.message.push.PushMessage;
 
 import java.io.*;
@@ -80,11 +81,7 @@ public class AuctionClient {
   /**
    * Callback xử lý push event (PushMessage subclass).
    */
-  private Consumer<Message> pushHandler;
-  /**
-   * Thread chạy ngầm để đọc message từ server.
-   */
-  private Thread listenerThread;
+  private Consumer<PushMessage> pushHandler;
 
   /**
    * Constructor mặc định - kết nối localhost:9999.
@@ -124,7 +121,10 @@ public class AuctionClient {
 
     // Tạo thread daemon đọc message bất đồng bộ
     // Daemon: tự động chết khi JVM thoát (không cần join thủ công)
-    listenerThread = new Thread(this::listenForMessages, "AuctionClient-Listener");
+    /**
+     * Thread chạy ngầm để đọc message từ server.
+     */
+    Thread listenerThread = new Thread(this::listenForMessages, "AuctionClient-Listener");
     listenerThread.setDaemon(true);
     listenerThread.start();
 
@@ -134,7 +134,7 @@ public class AuctionClient {
   /**
    * Đặt callback xử lý các push event từ server.
    */
-  public void setPushHandler(Consumer<Message> pushHandler) {
+  public void setPushHandler(Consumer<PushMessage> pushHandler) {
     this.pushHandler = pushHandler;
   }
 
@@ -222,7 +222,7 @@ public class AuctionClient {
         // Đa hình: phân loại bằng instanceof — PushMessage vs Response
         if (message instanceof PushMessage) {
           if (pushHandler != null) {
-            pushHandler.accept(message);
+            pushHandler.accept((PushMessage) message);
           }
         } else {
           if (pendingResponse != null) {
@@ -246,7 +246,6 @@ public class AuctionClient {
         break;
       }
     }
-
     // ===== CLEANUP =====
     connected = false;
     // Nếu có future đang chờ → fail nó để caller không block vô hạn
