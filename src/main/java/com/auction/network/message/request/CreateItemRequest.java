@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 import java.util.HashMap;
 import java.util.Map;
 

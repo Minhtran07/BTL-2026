@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /**
  * Request đăng nhập — chứa username + password.
  * Handler: {@link com.auction.network.handler.LoginHandler}

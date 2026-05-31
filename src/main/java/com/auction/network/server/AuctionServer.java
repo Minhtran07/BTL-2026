@@ -63,7 +63,7 @@ public class AuctionServer {
      */
     private final ExecutorService threadPool;
     /** Forwarder push event - Singleton chia sẻ cho mọi handler. */
-    private final PushForwarder forwarder = PushForwarder.getInstance();
+    private final PushForwarder forwarder = new PushForwarder();
 
     /**
      * Danh sách client handler đang kết nối.
