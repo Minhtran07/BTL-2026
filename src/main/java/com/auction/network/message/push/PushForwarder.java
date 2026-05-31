@@ -35,7 +35,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   <li>CopyOnWriteArrayList: an toàn cho iteration trong khi có add/remove</li>
  * </ul>
  */
-public class PushBroadcaster implements AuctionObserver {
+public class PushForwarder implements AuctionObserver {
     /**
      * Map: auctionId → list các PushListener đang subscribe phiên đó.
      *
@@ -44,7 +44,7 @@ public class PushBroadcaster implements AuctionObserver {
      */
     private final Map<String, List<PushListener>> subscriptions;
 
-    public PushBroadcaster() {
+    public PushForwarder() {
         subscriptions = new ConcurrentHashMap<>();
     }
 
@@ -91,7 +91,7 @@ public class PushBroadcaster implements AuctionObserver {
     private void dispatch(AuctionEvent event) {
         List<PushListener> observers = subscriptions.get(event.getAuctionId());
         if (observers != null) {
-            Message msg = toMessage(event);
+            PushMessage msg = toPush(event);
             for (PushListener observer : observers) {
                 try {
                     observer.onPush(msg);
@@ -103,7 +103,7 @@ public class PushBroadcaster implements AuctionObserver {
     }
 
     /**
-     * Convert {@link AuctionEvent} (domain) → {@link Message} (network protocol).
+     * Convert {@link AuctionEvent} (domain) → {@link PushMessage} (network protocol).
      *
      * <p>Phân loại:
      * <ul>
@@ -111,19 +111,19 @@ public class PushBroadcaster implements AuctionObserver {
      *   <li>Các event khác (STARTED/ENDED/CANCELED/EXTENDED) → {@link AuctionEventPush}</li>
      * </ul>
      */
-    private static Message toMessage(AuctionEvent event) {
+    private static PushMessage toPush(AuctionEvent event) {
         boolean isBid = event.getType() == AuctionEvent.EventType.NEW_BID
                 || event.getType() == AuctionEvent.EventType.AUTO_BID;
 
         if (isBid) {
             return new BidUpdatePush(
                     event.getAuctionId(),
-                    event.getType().name(),
+                    event.getType(),
                     event.getTransaction());
         } else {
             return new AuctionEventPush(
                     event.getAuctionId(),
-                    event.getType().name(),
+                    event.getType(),
                     event.getMessage());
         }
     }

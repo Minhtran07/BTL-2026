@@ -1,6 +1,7 @@
 package com.auction.network.message.push;
 
 import com.auction.model.transaction.BidTransaction;
+import com.auction.pattern.observer.AuctionEvent;
 
 /**
  * ============================================================================
@@ -34,7 +35,7 @@ import com.auction.model.transaction.BidTransaction;
 public class BidUpdatePush extends PushMessage {
     private static final long serialVersionUID = 1L;
 
-    private final String eventType;    // "NEW_BID" hoặc "AUTO_BID"
+    private final AuctionEvent.EventType eventType;    // "NEW_BID" hoặc "AUTO_BID"
     private final String bidderId;     // ID người đặt giá
     private final String bidderName;   // Tên hiển thị người đặt giá
     private final double bidAmount;    // Số tiền đã đặt
@@ -46,7 +47,7 @@ public class BidUpdatePush extends PushMessage {
      * @param eventType "NEW_BID" hoặc "AUTO_BID"
      * @param tx        transaction chứa thông tin bid (null-safe)
      */
-    public BidUpdatePush(String auctionId, String eventType, BidTransaction tx) {
+    public BidUpdatePush(String auctionId, AuctionEvent.EventType eventType, BidTransaction tx) {
         super(auctionId);
         this.eventType = eventType;
         this.bidderId = tx != null ? tx.getBidderId() : null;
@@ -55,7 +56,7 @@ public class BidUpdatePush extends PushMessage {
         this.bidTime = tx != null ? tx.getBidTime().toString() : null;
     }
 
-    public String getEventType() { return eventType; }
+    public AuctionEvent.EventType getEventType() { return eventType; }
     public String getBidderId() { return bidderId; }
     public String getBidderName() { return bidderName; }
     public double getBidAmount() { return bidAmount; }
