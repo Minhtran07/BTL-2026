@@ -1,4 +1,4 @@
-package com.auction.network.server;
+package com.auction.network.message.push;
 
 import com.auction.network.message.Message;
 
@@ -7,7 +7,7 @@ import com.auction.network.message.Message;
  * PUSHLISTENER - INTERFACE NHẬN PUSH EVENT TỪ SERVER
  * ============================================================================
  *
- * <p>Functional interface (1 method abstract) - cho phép {@link PushForwarder}
+ * <p>Functional interface (1 method abstract) - cho phép {@link PushBroadcaster}
  * gửi message tới các observer mà không cần biết chúng là gì.
  *
  * <p><b>Implementation chính:</b> {@code AuctionServer.ClientHandler} - mỗi
