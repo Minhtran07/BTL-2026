@@ -6,11 +6,11 @@ Bài tập lớn môn **Lập trình nâng cao** — Hệ thống đấu giá tr
 
 | Thành viên | Nhiệm vụ chính |
 |---|---|
-| Trần Đăng Minh | Network layer, Push system, Design Patterns (Observer, Strategy) |
-| Nguyễn Đình Phúc | Model, DAO, Database (SQLite) |
-| Nguyễn Ngọc Triệu | Service layer, Design Patterns (Factory, Singleton) |
-| Trịnh Tuấn Nghĩa | Controller, Giao diện JavaFX |
-| Trần Đăng Minh & Nguyễn Ngọc Triệu | Unit Test, JaCoCo coverage, Checkstyle |
+| Trần Đăng Minh | Model (Entity, User, Item, Auction), Exception, Utility |
+| Nguyễn Đình Phúc | DAO, Database (SQLite), Design Patterns (Factory, Singleton) |
+| Nguyễn Ngọc Triệu | Service layer, Network layer, Design Patterns (Observer, Strategy) |
+| Trịnh Tuấn Nghĩa | Controller, Giao diện JavaFX (FXML + CSS) |
+| Nguyễn Đình Phúc & Nguyễn Ngọc Triệu | Unit Test, JaCoCo coverage, Checkstyle |
 
 ## Công nghệ sử dụng
 
