@@ -6,6 +6,7 @@ import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.push.PushMessage;
 import com.auction.network.message.request.*;
 
 import java.io.IOException;
@@ -55,10 +56,10 @@ public class AuctionClientService {
         listeners.remove(listener);
     }
 
-    public void broadcastPush(Message message) {
+    public void broadcastPush(PushMessage push) {
         for (Listener listener : listeners) {
             try {
-                listener.onPush(message);
+                listener.onPush(push);
             } catch (Exception e) {
                 System.err.println("[Client] Listener error: " + e.getMessage());
             }
