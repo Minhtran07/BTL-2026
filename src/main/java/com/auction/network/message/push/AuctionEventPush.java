@@ -1,5 +1,7 @@
 package com.auction.network.message.push;
 
+import com.auction.pattern.observer.AuctionEvent;
+
 /**
  * ============================================================================
  * AUCTIONEVENTPUSH - PUSH EVENT TRẠNG THÁI PHIÊN ĐẤU GIÁ
@@ -29,7 +31,7 @@ package com.auction.network.message.push;
 public class AuctionEventPush extends PushMessage {
     private static final long serialVersionUID = 1L;
 
-    private final String eventType;     // "STARTED", "ENDED", "CANCELED", "EXTENDED"
+    private final AuctionEvent.EventType eventType;     // "STARTED", "ENDED", "CANCELED", "EXTENDED"
     private final String eventMessage;  // Mô tả chi tiết sự kiện (hiển thị cho user)
 
     /**
@@ -37,12 +39,12 @@ public class AuctionEventPush extends PushMessage {
      * @param eventType    loại sự kiện ("STARTED", "ENDED", "CANCELED", "EXTENDED")
      * @param eventMessage mô tả sự kiện (ví dụ: "Phiên đã kết thúc. Người thắng: ...")
      */
-    public AuctionEventPush(String auctionId, String eventType, String eventMessage) {
+    public AuctionEventPush(String auctionId, AuctionEvent.EventType eventType, String eventMessage) {
         super(auctionId);
         this.eventType = eventType;
         this.eventMessage = eventMessage;
     }
 
-    public String getEventType() { return eventType; }
+    public AuctionEvent.EventType getEventType() { return eventType; }
     public String getEventMessage() { return eventMessage; }
 }
