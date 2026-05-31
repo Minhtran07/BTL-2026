@@ -15,7 +15,22 @@ import java.util.Optional;
  * DELETEITEMHANDLER - XÓA ITEM
  * ============================================================================
  *
- * <p>Kiểm tra quyền trước khi xóa. Chỉ seller hoặc Admin được phép xóa.
+ * <p>Kiểm tra quyền + ràng buộc trước khi xóa:
+ * <ul>
+ *   <li>Chỉ seller sở hữu hoặc Admin được phép xóa</li>
+ *   <li>Không được xóa item đang có phiên đấu giá tham chiếu
+ *       (vi phạm FOREIGN KEY)</li>
+ * </ul>
+ *
+ * <p><b>FIX lỗi FOREIGN KEY:</b> Bảng {@code auctions} có
+ * {@code FOREIGN KEY (item_id) REFERENCES items(id)} KHÔNG có
+ * {@code ON DELETE CASCADE}. Nếu cố xóa item mà vẫn còn auction
+ * tham chiếu → SQLite ném exception. Handler kiểm tra trước bằng cách
+ * scan {@code getAllAuctions()} để tìm auction có cùng itemId.
+ * Nếu tìm thấy → trả lỗi yêu cầu hủy phiên trước.
+ *
+ * <p><b>Refactoring:</b> Dùng {@code instanceof DeleteItemRequest req}
+ * (pattern matching Java 16+) thay cho data map.
  */
 public class DeleteItemHandler implements RequestHandler {
 
@@ -39,6 +54,14 @@ public class DeleteItemHandler implements RequestHandler {
         if (!item.getSellerId().equals(authenticatedUser.getId())
                 && authenticatedUser.getRole() != UserRole.ADMIN) {
             return HandlerUtils.error("Bạn không có quyền xóa sản phẩm này");
+        }
+
+        // Kiểm tra ràng buộc: item đang có auction tham chiếu?
+        boolean hasAuction = auctionService.getAllAuctions().stream()
+                .anyMatch(a -> req.getItemId().equals(a.getItemId()));
+        if (hasAuction) {
+            return HandlerUtils.error(
+                    "Không thể xóa sản phẩm đang có phiên đấu giá. Hãy hủy phiên trước.");
         }
 
         auctionService.deleteItem(req.getItemId());

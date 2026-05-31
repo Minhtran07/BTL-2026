@@ -14,7 +14,17 @@ import com.auction.service.UserService;
  * ============================================================================
  *
  * <p>Khóa user → set active = false → user không login được nữa.
- * KHÔNG xóa khỏi DB → giữ dữ liệu lịch sử.
+ * KHÔNG xóa khỏi DB → giữ dữ liệu lịch sử (bid, auction, transaction).
+ *
+ * <p><b>Authorization:</b> Kiểm tra kép:
+ * <ol>
+ *   <li>{@code authenticatedUser != null} — phải đăng nhập</li>
+ *   <li>{@code role == ADMIN} — chỉ admin mới được khóa user khác</li>
+ * </ol>
+ *
+ * <p><b>Refactoring:</b> Dùng {@code instanceof DeactivateUserRequest req}
+ * (pattern matching Java 16+) thay cho {@code request.get("userId")}
+ * từ data map. Trả {@code Response.success()} thay vì Message thủ công.
  */
 public class DeactivateUserHandler implements RequestHandler {
 

@@ -1,7 +1,9 @@
 package com.auction.network.client;
 
 import com.auction.network.message.Message;
+import com.auction.network.message.Response;
 import com.auction.network.message.push.PushMessage;
+import com.auction.network.message.request.Request;
 
 import java.io.*;
 import java.net.Socket;
@@ -75,16 +77,12 @@ public class AuctionClient {
    * Dùng 'volatile' để thao tác thread-safe:
    * thread sendRequest set, thread listener complete.
    */
-  private volatile CompletableFuture<Message> pendingResponse = null;
+  private volatile CompletableFuture<Response<?>> pendingResponse = null;
 
   /**
    * Callback xử lý push event (PushMessage subclass).
    */
-  private Consumer<Message> pushHandler;
-  /**
-   * Thread chạy ngầm để đọc message từ server.
-   */
-  private Thread listenerThread;
+  private Consumer<PushMessage> pushHandler;
 
   /**
    * Constructor mặc định - kết nối localhost:9999.
@@ -124,7 +122,10 @@ public class AuctionClient {
 
     // Tạo thread daemon đọc message bất đồng bộ
     // Daemon: tự động chết khi JVM thoát (không cần join thủ công)
-    listenerThread = new Thread(this::listenForMessages, "AuctionClient-Listener");
+    /**
+     * Thread chạy ngầm để đọc message từ server.
+     */
+    Thread listenerThread = new Thread(this::listenForMessages, "AuctionClient-Listener");
     listenerThread.setDaemon(true);
     listenerThread.start();
 
@@ -134,7 +135,7 @@ public class AuctionClient {
   /**
    * Đặt callback xử lý các push event từ server.
    */
-  public void setPushHandler(Consumer<Message> pushHandler) {
+  public void setPushHandler(Consumer<PushMessage> pushHandler) {
     this.pushHandler = pushHandler;
   }
 
@@ -222,11 +223,11 @@ public class AuctionClient {
         // Đa hình: phân loại bằng instanceof — PushMessage vs Response
         if (message instanceof PushMessage) {
           if (pushHandler != null) {
-            pushHandler.accept(message);
+            pushHandler.accept((PushMessage) message);
           }
-        } else {
+        } else if (message instanceof Response<?>) {
           if (pendingResponse != null) {
-              pendingResponse.complete(message);
+              pendingResponse.complete((Response<?>) message);
           } else {
             System.err.println("[Client] Nhận phản hồi nhưng không có request đang chờ: "
                     + message.getClass().getSimpleName());
@@ -246,11 +247,10 @@ public class AuctionClient {
         break;
       }
     }
-
     // ===== CLEANUP =====
     connected = false;
     // Nếu có future đang chờ → fail nó để caller không block vô hạn
-    CompletableFuture<Message> pending = pendingResponse;
+    CompletableFuture<Response<?>> pending = pendingResponse;
     pendingResponse = null;
     if (pending != null) {
       pending.completeExceptionally(new IOException("Kết nối bị đóng"));

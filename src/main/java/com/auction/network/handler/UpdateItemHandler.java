@@ -19,6 +19,16 @@ import com.auction.service.AuctionService;
  *   <li>Kiểm tra quyền: chỉ seller của item hoặc Admin được sửa</li>
  *   <li>Gọi service update</li>
  * </ol>
+ *
+ * <p><b>Refactoring:</b>
+ * <ul>
+ *   <li>Trước: đọc từng field từ data map, tự build Item object</li>
+ *   <li>Sau: client gửi full Item object trong {@link UpdateItemRequest},
+ *       dùng pattern matching {@code instanceof UpdateItemRequest req}</li>
+ * </ul>
+ *
+ * <p><b>Authorization:</b> So sánh {@code item.getSellerId()} với
+ * {@code authenticatedUser.getId()} — chỉ chủ sở hữu hoặc Admin mới sửa được.
  */
 public class UpdateItemHandler implements RequestHandler {
 

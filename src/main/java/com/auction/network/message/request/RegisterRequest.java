@@ -1,7 +1,10 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
+/**
+ * Request đăng ký tài khoản — chứa thông tin user mới.
+ * Handler: {@link com.auction.network.handler.RegisterHandler}
+ * <p>{@code role} là "BUYER" hoặc "SELLER" (ADMIN bị chặn ở handler).
+ */
 public class RegisterRequest extends Request {
     private static final long serialVersionUID = 1L;
 

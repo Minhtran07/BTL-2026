@@ -1,5 +1,7 @@
 package com.auction.network.message;
 
+import com.auction.network.message.request.Request;
+
 import java.io.Serializable;
 
 /**
