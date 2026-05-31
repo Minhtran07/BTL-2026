@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /** Request hủy phiên đấu giá (→ CANCELED, không settlement). */
 public class CancelAuctionRequest extends Request {
     private static final long serialVersionUID = 1L;

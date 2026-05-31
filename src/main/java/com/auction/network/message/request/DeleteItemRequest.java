@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /**
  * Request xóa sản phẩm theo ID.
  * Handler: {@link com.auction.network.handler.DeleteItemHandler}

@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /**
  * Request lấy thông tin user mới nhất từ server (balance, revenue...).
  *

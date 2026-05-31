@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /**
  * Request đặt giá — chứa auctionId + amount.
  * Handler: {@link com.auction.network.handler.PlaceBidHandler}

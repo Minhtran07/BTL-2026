@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /**
  * Request subscribe push events cho 1 phiên đấu giá (Observer Pattern).
  * Sau khi subscribe, server sẽ push BidUpdatePush / AuctionEventPush

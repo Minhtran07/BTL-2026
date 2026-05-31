@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /**
  * Request đăng ký tài khoản — chứa thông tin user mới.
  * Handler: {@link com.auction.network.handler.RegisterHandler}

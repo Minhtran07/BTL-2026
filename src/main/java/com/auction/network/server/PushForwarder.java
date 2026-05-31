@@ -38,9 +38,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * </ul>
  */
 public class PushForwarder implements AuctionObserver {
-
-    private static volatile PushForwarder instance;
-
     /**
      * Map: auctionId → list các PushListener đang subscribe phiên đó.
      *
@@ -49,20 +46,8 @@ public class PushForwarder implements AuctionObserver {
      */
     private final Map<String, List<PushListener>> subscriptions;
 
-    private PushForwarder() {
+    public PushForwarder() {
         subscriptions = new ConcurrentHashMap<>();
-    }
-
-    /** Lấy instance Singleton (Double-Checked Locking). */
-    public static PushForwarder getInstance() {
-        if (instance == null) {
-            synchronized (PushForwarder.class) {
-                if (instance == null) {
-                    instance = new PushForwarder();
-                }
-            }
-        }
-        return instance;
     }
 
     /**

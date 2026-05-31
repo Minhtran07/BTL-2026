@@ -1,7 +1,5 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
 /**
  * Request tạo phiên đấu giá mới — chứa itemId, itemName, giá khởi điểm, thời lượng.
  * Handler: {@link com.auction.network.handler.CreateAuctionHandler}

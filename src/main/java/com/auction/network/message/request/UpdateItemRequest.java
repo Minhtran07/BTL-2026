@@ -1,7 +1,6 @@
 package com.auction.network.message.request;
 
 import com.auction.model.item.Item;
-import com.auction.network.message.Request;
 
 /**
  * Request cập nhật sản phẩm — gửi full Item object (Electronics/Art/Vehicle).
