@@ -13,20 +13,8 @@ import java.util.stream.Collectors;
 
 /**
  * ============================================================================
- * AUCTIONREGISTRY - SINGLETON QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ
+ * AUCTIONREGISTRY - QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ
  * ============================================================================
- *
- * <p>Đây là class áp dụng <b>SINGLETON PATTERN</b> - chỉ tồn tại 1 instance
- * duy nhất trong toàn JVM. Vai trò: quản lý "in-memory cache" của các phiên
- * đấu giá đang hoạt động.
- *
- * <p><b>SINGLETON PATTERN LÀ GÌ?</b> Đảm bảo 1 class chỉ có 1 instance, cung
- * cấp 1 điểm truy cập toàn cục. Áp dụng khi:
- * <ul>
- *   <li>Cần quản lý tài nguyên dùng chung (DB connection, cache, scheduler...)</li>
- *   <li>Tránh tạo nhiều instance lãng phí bộ nhớ</li>
- *   <li>Cần một "registry" trung tâm</li>
- * </ul>
  *
  * <p><b>TẠI SAO DÙNG ConcurrentHashMap?</b>
  * Trong môi trường multi-thread (server xử lý nhiều client cùng lúc),
