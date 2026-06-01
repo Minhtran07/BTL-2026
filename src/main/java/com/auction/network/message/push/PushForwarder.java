@@ -1,8 +1,8 @@
 package com.auction.network.message.push;
 
 import com.auction.network.message.Message;
-import com.auction.pattern.observer.AuctionEvent;
-import com.auction.pattern.observer.AuctionObserver;
+import com.auction.pattern.singleton.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionObserver;
 
 import java.util.List;
 import java.util.Map;

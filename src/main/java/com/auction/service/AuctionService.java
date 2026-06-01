@@ -14,9 +14,8 @@ import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.Bidder;
 import com.auction.model.user.Seller;
 import com.auction.pattern.factory.ItemFactory;
-import com.auction.pattern.observer.AuctionEvent;
-import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.singleton.AuctionRegistry;
+import com.auction.pattern.singleton.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
 import com.auction.pattern.strategy.BidValidationStrategy;
 import com.auction.pattern.strategy.StandardBidValidation;
 
@@ -96,29 +95,20 @@ public class AuctionService {
         this.itemDao        = new ItemDaoImpl();
         this.auctionDao     = new AuctionDaoImpl();
         this.userService    = new UserService();
-        this.auctionRegistry = AuctionRegistry.getInstance();
+        this.auctionRegistry = new AuctionRegistry();
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator   = new StandardBidValidation();
-    }
-
-    /**
-     * Constructor injection cho unit tests (2 DAOs, tự tạo UserService).
-     * Khi UserService sử dụng DAO mặc định (file-based) và người dùng không
-     * tồn tại trong file, settlement sẽ silently no-op — hành vi an toàn cho tests.
-     */
-    public AuctionService(GenericDao<Item> itemDao, GenericDao<Auction> auctionDao) {
-        this(itemDao, auctionDao, new UserService());
     }
 
     /**
      * Constructor injection đầy đủ (dùng trong tests yêu cầu settlement kiểm chứng được).
      */
     public AuctionService(GenericDao<Item> itemDao, GenericDao<Auction> auctionDao,
-                          UserService userService) {
+                          UserService userService, AuctionRegistry auctionRegistry) {
         this.itemDao         = itemDao;
         this.auctionDao      = auctionDao;
         this.userService     = userService;
-        this.auctionRegistry = AuctionRegistry.getInstance();
+        this.auctionRegistry = auctionRegistry;
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator    = new StandardBidValidation();
     }
