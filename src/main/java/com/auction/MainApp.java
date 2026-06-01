@@ -2,10 +2,12 @@ package com.auction;
 
 // ====== IMPORT CÁC LỚP CẦN DÙNG ======
 // AuctionClient: lớp kết nối TCP socket tới server đấu giá
+import com.auction.model.user.UserRole;
 import com.auction.network.client.AuctionClient;
 // AuctionClientService: Singleton giữ tham chiếu tới AuctionClient để mọi controller dùng chung
 import com.auction.network.client.AuctionClientService;
 // Application: lớp cha bắt buộc cho mọi ứng dụng JavaFX (giống main() cho JavaFX)
+import com.auction.service.UserService;
 import javafx.application.Application;
 // FXMLLoader: dùng để nạp giao diện từ file .fxml (giao diện được vẽ trong file FXML)
 import javafx.fxml.FXMLLoader;
@@ -88,7 +90,6 @@ public class MainApp extends Application {
         AuctionClient client = new AuctionClient();
         // Đăng ký client vào service (Singleton) để controller khác dùng chung
         AuctionClientService.getInstance().setClient(client);
-
         try {
             // Mở kết nối TCP đến server (mặc định: localhost:9999)
             // Nếu server chưa chạy → ném IOException

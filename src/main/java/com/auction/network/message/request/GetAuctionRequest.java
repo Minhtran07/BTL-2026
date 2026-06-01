@@ -1,7 +1,6 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
+/** Request lấy 1 phiên đấu giá theo ID. Handler dùng cache-first (Cache-Aside pattern). */
 public class GetAuctionRequest extends Request {
     private static final long serialVersionUID = 1L;
 

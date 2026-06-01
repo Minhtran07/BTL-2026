@@ -1,10 +1,8 @@
-package com.auction.network.server;
+package com.auction.network.message.push;
 
 import com.auction.network.message.Message;
-import com.auction.network.message.push.AuctionEventPush;
-import com.auction.network.message.push.BidUpdatePush;
-import com.auction.pattern.observer.AuctionEvent;
-import com.auction.pattern.observer.AuctionObserver;
+import com.auction.pattern.singleton.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionObserver;
 
 import java.util.List;
 import java.util.Map;
@@ -38,9 +36,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * </ul>
  */
 public class PushForwarder implements AuctionObserver {
-
-    private static volatile PushForwarder instance;
-
     /**
      * Map: auctionId → list các PushListener đang subscribe phiên đó.
      *
@@ -49,20 +44,8 @@ public class PushForwarder implements AuctionObserver {
      */
     private final Map<String, List<PushListener>> subscriptions;
 
-    private PushForwarder() {
+    public PushForwarder() {
         subscriptions = new ConcurrentHashMap<>();
-    }
-
-    /** Lấy instance Singleton (Double-Checked Locking). */
-    public static PushForwarder getInstance() {
-        if (instance == null) {
-            synchronized (PushForwarder.class) {
-                if (instance == null) {
-                    instance = new PushForwarder();
-                }
-            }
-        }
-        return instance;
     }
 
     /**
@@ -108,7 +91,7 @@ public class PushForwarder implements AuctionObserver {
     private void dispatch(AuctionEvent event) {
         List<PushListener> observers = subscriptions.get(event.getAuctionId());
         if (observers != null) {
-            Message msg = toMessage(event);
+            PushMessage msg = toPush(event);
             for (PushListener observer : observers) {
                 try {
                     observer.onPush(msg);
@@ -120,7 +103,7 @@ public class PushForwarder implements AuctionObserver {
     }
 
     /**
-     * Convert {@link AuctionEvent} (domain) → {@link Message} (network protocol).
+     * Convert {@link AuctionEvent} (domain) → {@link PushMessage} (network protocol).
      *
      * <p>Phân loại:
      * <ul>
@@ -128,19 +111,19 @@ public class PushForwarder implements AuctionObserver {
      *   <li>Các event khác (STARTED/ENDED/CANCELED/EXTENDED) → {@link AuctionEventPush}</li>
      * </ul>
      */
-    private static Message toMessage(AuctionEvent event) {
+    private static PushMessage toPush(AuctionEvent event) {
         boolean isBid = event.getType() == AuctionEvent.EventType.NEW_BID
                 || event.getType() == AuctionEvent.EventType.AUTO_BID;
 
         if (isBid) {
             return new BidUpdatePush(
                     event.getAuctionId(),
-                    event.getType().name(),
+                    event.getType(),
                     event.getTransaction());
         } else {
             return new AuctionEventPush(
                     event.getAuctionId(),
-                    event.getType().name(),
+                    event.getType(),
                     event.getMessage());
         }
     }

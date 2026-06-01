@@ -20,6 +20,8 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
+import javafx.util.StringConverter;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -115,6 +117,10 @@ public class AuctionDetailController {
         }
     };
 
+    /**
+     * FXML initialize — gắn formatter cho tất cả ô nhập tiền.
+     * Gọi tự động bởi FXMLLoader sau khi inject @FXML fields.
+     */
     @FXML
     private void initialize() {
         attachThousandSeparatorFormatter(bidAmountField);
@@ -122,6 +128,19 @@ public class AuctionDetailController {
         attachThousandSeparatorFormatter(incrementField);
     }
 
+    /**
+     * Gắn listener tự format số tiền có dấu phân cách hàng nghìn (1,000,000).
+     *
+     * <p><b>Thuật toán giữ vị trí caret:</b>
+     * <ol>
+     *   <li>Đếm số digit trước caret hiện tại</li>
+     *   <li>Strip tất cả ký tự không phải digit</li>
+     *   <li>Format lại với dấu phẩy (Locale.US)</li>
+     *   <li>Đặt caret về vị trí tương ứng (đếm lại digit)</li>
+     * </ol>
+     * Nhờ vậy user gõ "1000000" → tự hiển thị "1,000,000" mà cursor
+     * không nhảy lung tung.
+     */
     private void attachThousandSeparatorFormatter(TextField field) {
         if (field == null) return;
         field.textProperty().addListener((obs, oldVal, newVal) -> {
@@ -155,6 +174,10 @@ public class AuctionDetailController {
         });
     }
 
+    /**
+     * Được gọi từ DashboardController khi user click vào 1 phiên.
+     * Khởi tạo toàn bộ: subscribe push, load data, start countdown.
+     */
     public void setAuctionId(String auctionId) {
         this.auctionId = auctionId;
         auctionClientService.addPushListener(serverListener);
@@ -180,6 +203,13 @@ public class AuctionDetailController {
         }
     }
 
+    /**
+     * Đổ dữ liệu auction vào các UI component.
+     *
+     * <p>Bao gồm: thông tin item, trạng thái phiên (badge CSS động),
+     * giá hiện tại, người dẫn đầu, lịch sử bid, biểu đồ giá,
+     * và gợi ý giá bid (+5% giá hiện tại).
+     */
     private void loadAuctionData() {
         if (currentAuction == null) return;
         Auction auction = currentAuction;
@@ -229,6 +259,10 @@ public class AuctionDetailController {
         }
     }
 
+    /**
+     * Cập nhật ListView lịch sử bid — hiển thị theo thứ tự mới nhất trước.
+     * Format: [HH:mm:ss] TênNgười — 1,000,000 VNĐ
+     */
     private void updateBidHistory(Auction auction) {
         ObservableList<String> items = FXCollections.observableArrayList();
         List<BidTransaction> history = auction.getBidHistory();
@@ -247,15 +281,14 @@ public class AuctionDetailController {
     /**
      * Cập nhật biểu đồ giá theo diễn biến bid.
      *
-     * <p><b>FIX "mất toạ độ":</b> JavaFX LineChart + CategoryAxis có bug khi
-     * gọi {@code getData().clear()} rồi add series mới — CategoryAxis mất
-     * tick labels (trục X trống trơn). Nguyên nhân: auto-ranging xoá danh
-     * sách category nội bộ khi data bị clear, nhưng không tái tạo khi data
-     * mới được add vào.
-     *
-     * <p>Giải pháp: tắt auto-ranging trên xAxis, tự quản lý danh sách
-     * categories thủ công → đảm bảo trục X luôn hiển thị đầy đủ nhãn.
-     * Đồng thời xoay nhãn 45° khi có nhiều bid để tránh chồng chéo.
+     * <p><b>FIX "mất toạ độ":</b>
+     * <ul>
+     *   <li>CategoryAxis: tắt autoRanging, set categories thủ công để trục X
+     *       không mất tick labels khi clear/re-add data</li>
+     *   <li>NumberAxis: custom formatter hiển thị giá dạng "1,000,000" thay vì
+     *       "1000000.0" mặc định</li>
+     *   <li>Tooltip trên mỗi data point: hover hiển thị thời gian + giá cụ thể</li>
+     * </ul>
      */
     private void updatePriceChart(Auction auction) {
         List<BidTransaction> history = auction.getBidHistory();
@@ -266,6 +299,16 @@ public class AuctionDetailController {
                 && currentFingerprint.equals(lastChartFingerprint)) {
             return;
         }
+
+        // Format trục Y hiển thị giá tiền có dấu phân cách hàng nghìn
+        yAxis.setTickLabelFormatter(new StringConverter<>() {
+            @Override
+            public String toString(Number value) {
+                return String.format("%,.0f", value.doubleValue());
+            }
+            @Override
+            public Number fromString(String string) { return 0; }
+        });
 
         XYChart.Series<String, Number> newSeries = new XYChart.Series<>();
         newSeries.setName("Giá đấu");
@@ -287,17 +330,32 @@ public class AuctionDetailController {
             newSeries.getData().add(new XYChart.Data<>(label, tx.getBidAmount()));
         }
 
-        // Fix: set categories thủ công để CategoryAxis không mất tick labels
+        // Set categories thủ công để CategoryAxis không mất tick labels
         xAxis.setAutoRanging(false);
         xAxis.setCategories(FXCollections.observableArrayList(categories));
-        xAxis.setTickLabelRotation(categories.size() > 6 ? -45 : 0);
 
         priceChart.getData().clear();
         priceChart.getData().add(newSeries);
         priceSeries = newSeries;
         lastChartFingerprint = currentFingerprint;
+
+        // Gắn Tooltip cho mỗi data point — hover để xem thời gian + giá cụ thể
+        for (XYChart.Data<String, Number> data : newSeries.getData()) {
+            if (data.getNode() != null) {
+                String tooltipText = data.getXValue() + "\n"
+                        + String.format("%,.0f VNĐ", data.getYValue().doubleValue());
+                Tooltip tooltip = new Tooltip(tooltipText);
+                tooltip.setStyle("-fx-font-size: 13px;");
+                Tooltip.install(data.getNode(), tooltip);
+            }
+        }
     }
 
+    /**
+     * Tính hash fingerprint của bid history — dùng để so sánh nhanh
+     * xem data có thay đổi không. Nếu fingerprint giống → skip rebuild chart
+     * (tránh flickering khi sync timer reload data nhưng không có bid mới).
+     */
     private String computeHistoryFingerprint(List<BidTransaction> history) {
         if (history.isEmpty()) return "0";
         int hash = 1;
@@ -308,6 +366,11 @@ public class AuctionDetailController {
         return history.size() + ":" + hash;
     }
 
+    /**
+     * Khởi chạy timer đếm ngược thời gian còn lại của phiên.
+     * Timer chạy mỗi giây trên daemon thread, update UI qua Platform.runLater.
+     * Tự cancel khi phiên FINISHED.
+     */
     private void startCountdown() {
         countdownTimer = new Timer(true);
         countdownTimer.scheduleAtFixedRate(new TimerTask() {
@@ -337,6 +400,12 @@ public class AuctionDetailController {
         }, 0, 1000);
     }
 
+    /**
+     * Xử lý nút "Đặt giá" — gửi PlaceBidRequest lên server.
+     *
+     * <p>Flow: strip formatting (dấu phẩy) → parse double → gọi service
+     * → hiện thông báo thành công/lỗi → reload data.
+     */
     @FXML
     private void handlePlaceBid() {
         hideBidMessages();
@@ -362,11 +431,17 @@ public class AuctionDetailController {
         }
     }
 
+    /** Loại bỏ dấu phẩy, khoảng trắng... chỉ giữ lại digits để parse số. */
     private String stripFormatting(String text) {
         if (text == null) return "";
         return text.replaceAll("\\D", "");
     }
 
+    /**
+     * Xử lý nút "Bật Auto-Bid" — đăng ký auto-bid cho phiên hiện tại.
+     * Server sẽ tự đặt giá mỗi khi có người bid cao hơn, cho đến khi
+     * đạt maxBid hoặc phiên kết thúc.
+     */
     @FXML
     private void handleAutoBid() {
         hideBidMessages();
@@ -397,12 +472,21 @@ public class AuctionDetailController {
         }
     }
 
+    /** Quay về Dashboard — cleanup resources trước khi navigate. */
     @FXML
     private void handleBack() {
         cleanup();
         MainApp.navigateTo("/com/auction/view/dashboard.fxml", "Trang chủ");
     }
 
+    /**
+     * Giải phóng resources khi rời màn hình:
+     * <ol>
+     *   <li>Cancel countdown timer (tránh memory leak)</li>
+     *   <li>Remove push listener (tránh ghost updates)</li>
+     *   <li>Unsubscribe auction trên server (giảm tải push traffic)</li>
+     * </ol>
+     */
     private void cleanup() {
         if (countdownTimer != null) {
             countdownTimer.cancel();

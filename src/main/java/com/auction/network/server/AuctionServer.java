@@ -3,6 +3,8 @@ package com.auction.network.server;
 import com.auction.model.user.User;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
+import com.auction.network.message.push.PushForwarder;
+import com.auction.network.message.push.PushListener;
 import com.auction.network.message.request.*;
 import com.auction.network.handler.*;
 import com.auction.service.AuctionService;
@@ -63,7 +65,7 @@ public class AuctionServer {
      */
     private final ExecutorService threadPool;
     /** Forwarder push event - Singleton chia sẻ cho mọi handler. */
-    private final PushForwarder forwarder = PushForwarder.getInstance();
+    private final PushForwarder forwarder = new PushForwarder();
 
     /**
      * Danh sách client handler đang kết nối.
@@ -126,6 +128,9 @@ public class AuctionServer {
         map.put(PlaceBidRequest.class,           new PlaceBidHandler(auctionService));
         map.put(RegisterAutoBidRequest.class,    new RegisterAutoBidHandler(auctionService));
         map.put(GetBidHistoryRequest.class,      new GetBidHistoryHandler(auctionService));
+
+        // User info (tài chính)
+        map.put(GetUserInfoRequest.class,    new GetUserInfoHandler(userService));
 
         // Admin
         map.put(GetAllUsersRequest.class,    new GetAllUsersHandler(userService));

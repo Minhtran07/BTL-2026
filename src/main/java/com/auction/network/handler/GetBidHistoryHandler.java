@@ -16,6 +16,17 @@ import java.util.ArrayList;
  * ============================================================================
  *
  * <p>Trả về {@code ArrayList<BidTransaction>} qua body của Response.
+ * Dùng cho AuctionDetailController hiển thị lịch sử bid + biểu đồ giá.
+ *
+ * <p><b>Refactoring:</b>
+ * <ul>
+ *   <li>Trước: {@code request.get("auctionId")} từ data map</li>
+ *   <li>Sau: {@code instanceof GetBidHistoryRequest req} (Java 16+)</li>
+ * </ul>
+ *
+ * <p><b>Cache-Aside:</b> Service tự resolve auction từ cache (nếu đang chạy)
+ * hoặc DB (nếu đã kết thúc). Bid history trong cache luôn mới nhất cho
+ * phiên RUNNING — không cần query DB riêng.
  */
 public class GetBidHistoryHandler implements RequestHandler {
 
@@ -25,6 +36,10 @@ public class GetBidHistoryHandler implements RequestHandler {
         this.auctionService = auctionService;
     }
 
+    /**
+     * Lấy lịch sử bid theo auctionId. Body: {@code ArrayList<BidTransaction>}.
+     * Pattern matching: {@code instanceof GetBidHistoryRequest req}.
+     */
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (!(request instanceof GetBidHistoryRequest req)) {
