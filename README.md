@@ -60,6 +60,7 @@ src/main/java/com/auction/
 │   └── ItemDaoImpl.java
 ├── service/                      # Business logic
 │   ├── AuctionService.java
+│   ├── AuctionRegistry (in-memory cache)
 │   └── UserService.java
 ├── network/                      # Client-Server TCP
 │   ├── server/AuctionServer.java # Server đa luồng (thread pool)
@@ -70,8 +71,7 @@ src/main/java/com/auction/
 │       └── push/                 # Push notification (PushForwarder, PushListener)
 ├── pattern/                      # Design Patterns
 │   ├── factory/                  # Factory Method — tạo Item theo category
-│   ├── observer/                 # Observer — AuctionEventDispatcher, realtime event
-│   ├── singleton/                # Singleton — AuctionRegistry (in-memory cache)
+│   ├── singleton/observer/       # SingletonxObserver — AuctionEventDispatcher, realtime event
 │   └── strategy/                 # Strategy — BidValidationStrategy
 ├── exception/                    # Custom exceptions
 └── util/                         # Tiện ích (PasswordUtils)
