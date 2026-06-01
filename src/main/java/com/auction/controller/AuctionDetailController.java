@@ -102,8 +102,9 @@ public class AuctionDetailController {
     private final AuctionClientService auctionClientService = AuctionClientService.getInstance();
     /** Snapshot mới nhất của auction (lấy từ server). */
     private Auction currentAuction;
-    /** Timer chạy mỗi giây - chỉ update countdown timer (không gọi server). */
+    /** Timer chạy mỗi giây - update countdown + polling backup mỗi 5 giây. */
     private Timer countdownTimer;
+    private int tickCount;
     /** Data series cho biểu đồ giá. */
     private XYChart.Series<String, Number> priceSeries;
     /** Hash của data biểu đồ - tránh rebuild chart nếu data không đổi. */
@@ -372,6 +373,7 @@ public class AuctionDetailController {
      * Tự cancel khi phiên FINISHED.
      */
     private void startCountdown() {
+        tickCount = 0;
         countdownTimer = new Timer(true);
         countdownTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -394,6 +396,11 @@ public class AuctionDetailController {
                         countdownTimer.cancel();
                     } else if (auction.getStatus() == AuctionStatus.OPEN) {
                         timerLabel.setText("Chưa bắt đầu");
+                    }
+
+                    tickCount++;
+                    if (tickCount % 5 == 0) {
+                        reloadAuction();
                     }
                 });
             }
