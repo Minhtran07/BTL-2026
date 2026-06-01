@@ -1,4 +1,4 @@
-package com.auction.pattern.singleton;
+package com.auction.service;
 
 import com.auction.model.auction.Auction;
 import com.auction.model.auction.AuctionStatus;
@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 /**
  * ============================================================================
- * AUCTIONMANAGER - SINGLETON QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ
+ * AUCTIONREGISTRY - SINGLETON QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ
  * ============================================================================
  *
  * <p>Đây là class áp dụng <b>SINGLETON PATTERN</b> - chỉ tồn tại 1 instance
@@ -35,13 +35,6 @@ import java.util.stream.Collectors;
  *
  */
 public class AuctionRegistry {
-
-    /**
-     * Instance Singleton.
-     * <b>volatile</b> đảm bảo các thread nhìn thấy giá trị mới nhất (memory visibility).
-     */
-    private static volatile AuctionRegistry instance;
-
     /**
      * Cache các phiên đấu giá trong RAM thay cho ConcurrentHashMap.
      * Key = auctionId, Value = Auction object.
@@ -58,33 +51,12 @@ public class AuctionRegistry {
      * Constructor PRIVATE - đặc trưng Singleton.
      * Khởi tạo map rỗng + scheduler, sau đó bắt đầu task monitor.
      */
-    private AuctionRegistry() {
+    public AuctionRegistry() {
         // Khởi tạo Guava Cache: Tự động đuổi khứ bản ghi ra khỏi RAM nếu sau 10 phút không ai đọc/ghi
         this.auctionCache = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .build();
         this.scheduler = Executors.newScheduledThreadPool(2);
-    }
-
-    /**
-     * Lấy instance Singleton - dùng Double-Checked Locking (DCL).
-     *
-     * <p><b>DCL pattern:</b>
-     * <ul>
-     *   <li>Lần 1 (ngoài lock): nếu instance đã có → trả về luôn (không tốn lock)</li>
-     *   <li>Vào lock</li>
-     *   <li>Lần 2 (trong lock): kiểm tra lại để tránh 2 thread cùng tạo instance</li>
-     * </ul>
-     */
-    public static AuctionRegistry getInstance() {
-        if (instance == null) {
-            synchronized (AuctionRegistry.class) {
-                if (instance == null) {
-                    instance = new AuctionRegistry();
-                }
-            }
-        }
-        return instance;
     }
 
     /**
@@ -166,20 +138,6 @@ public class AuctionRegistry {
             scheduler.shutdownNow();
             // Preserve interrupt flag - quan trọng để thread cha biết bị interrupt
             Thread.currentThread().interrupt();
-        }
-    }
-
-    /**
-     * Reset instance về null - CHỈ DÙNG TRONG UNIT TEST.
-     *
-     * <p>Singleton pattern thông thường KHÔNG có resetInstance() vì phá vỡ
-     * tính "duy nhất". Tuy nhiên trong test, mỗi test cần state sạch nên
-     * cần reset. Đánh dấu rõ là chỉ dùng trong test để tránh lạm dụng.
-     */
-    public static synchronized void resetInstance() {
-        if (instance != null) {
-            instance.shutdown();
-            instance = null;
         }
     }
 }

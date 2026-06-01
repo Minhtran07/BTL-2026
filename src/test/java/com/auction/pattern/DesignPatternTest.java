@@ -6,10 +6,9 @@ import com.auction.model.item.Item;
 import com.auction.model.item.ItemCategory;
 import com.auction.model.item.Vehicle;
 import com.auction.pattern.factory.ItemFactory;
-import com.auction.pattern.observer.AuctionEvent;
-import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.observer.AuctionObserver;
-import com.auction.pattern.singleton.AuctionRegistry;
+import com.auction.pattern.singleton.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
+import com.auction.pattern.singleton.observer.AuctionObserver;
 import com.auction.pattern.strategy.BidValidationStrategy;
 import com.auction.pattern.strategy.ReservePriceBidValidation;
 import com.auction.pattern.strategy.StandardBidValidation;
@@ -52,20 +51,10 @@ class DesignPatternTest {
 
     @AfterAll
     static void tearDownAll() {
-        // Shutdown scheduler của AuctionManager để tránh thread leak
-        AuctionRegistry.resetInstance();
         AuctionEventDispatcher.resetInstance();
     }
 
     // ==================== Singleton Pattern ====================
-
-    @Test
-    @DisplayName("Singleton: AuctionManager trả về cùng instance")
-    void testSingletonAuctionManager() {
-        AuctionRegistry m1 = AuctionRegistry.getInstance();
-        AuctionRegistry m2 = AuctionRegistry.getInstance();
-        assertSame(m1, m2, "Phải là cùng một instance");
-    }
 
     @Test
     @DisplayName("Singleton: AuctionEventDispatcher trả về cùng instance")

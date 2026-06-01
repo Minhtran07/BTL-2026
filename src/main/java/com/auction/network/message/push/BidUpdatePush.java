@@ -1,7 +1,7 @@
 package com.auction.network.message.push;
 
 import com.auction.model.transaction.BidTransaction;
-import com.auction.pattern.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionEvent;
 
 /**
  * ============================================================================
