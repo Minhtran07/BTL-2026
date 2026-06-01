@@ -56,14 +56,6 @@ public class DeleteItemHandler implements RequestHandler {
             return HandlerUtils.error("Bạn không có quyền xóa sản phẩm này");
         }
 
-        // Kiểm tra ràng buộc: item đang có auction tham chiếu?
-        boolean hasAuction = auctionService.getAllAuctions().stream()
-                .anyMatch(a -> req.getItemId().equals(a.getItemId()));
-        if (hasAuction) {
-            return HandlerUtils.error(
-                    "Không thể xóa sản phẩm đang có phiên đấu giá. Hãy hủy phiên trước.");
-        }
-
         auctionService.deleteItem(req.getItemId());
         return Response.success();
     }
