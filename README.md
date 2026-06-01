@@ -20,7 +20,6 @@ Bài tập lớn môn **Lập trình nâng cao** — Hệ thống đấu giá tr
 - **Giao diện (Client):** JavaFX 21 + FXML + CSS
 - **Cơ sở dữ liệu (Server):** SQLite (qua JDBC)
 - **Giao tiếp mạng:** TCP Socket (Java I/O)
-- **Serialization:** Gson (JSON)
 - **Caching:** Google Guava Cache
 - **Testing:** JUnit 5, JaCoCo (coverage tối thiểu 60%)
 - **Code style:** Google Checkstyle
