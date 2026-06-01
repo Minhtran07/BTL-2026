@@ -149,7 +149,6 @@ Lệnh này sẽ chạy toàn bộ unit test, kiểm tra code coverage (JaCoCo �
 
 | Pattern | Class | Mục đích |
 |---|---|---|
-| **Singleton** | `AuctionRegistry` | Cache phiên đấu giá in-memory (Guava Cache) |
 | **Singleton** | `AuctionEventDispatcher` | Event bus dùng chung toàn app |
 | **Factory Method** | `ItemFactory`, `ItemCreator` | Tạo Item theo category (Art, Electronics, Vehicle) |
 | **Observer** | `AuctionEventDispatcher`, `AuctionObserver` | Phát sự kiện đấu giá realtime |
