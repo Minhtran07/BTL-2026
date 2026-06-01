@@ -1,4 +1,4 @@
-package com.auction.network.server;
+package com.auction.network.message.push;
 
 import com.auction.network.message.Message;
 

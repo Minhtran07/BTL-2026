@@ -11,8 +11,7 @@ import com.auction.model.item.Item;
 import com.auction.model.item.ItemCategory;
 import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
-import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.singleton.AuctionManager;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
 import org.junit.jupiter.api.*;
 
 import java.time.LocalDateTime;
@@ -47,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit Test cho AuctionService.
  *
  * <p><b>Cách ly hoàn toàn</b>: tất cả DAOs đều là in-memory — không đọc hoặc
- * ghi file nào trên đĩa.  Singleton {@link AuctionManager} và
+ * ghi file nào trên đĩa.  Singleton {@link AuctionRegistry} và
  * {@link AuctionEventDispatcher} được reset trước mỗi test để tránh side-effects.
  */
 class AuctionServiceTest {
@@ -58,19 +57,18 @@ class AuctionServiceTest {
     void setUp() {
         // Reset Singletons để tránh side effects giữa các test
         AuctionEventDispatcher.resetInstance();
-        AuctionManager.resetInstance();
 
         // Tất cả DAOs đều in-memory — không chạm file hệ thống
         GenericDao<Item>    itemDao    = new InMemoryDao<>();
         GenericDao<Auction> auctionDao = new InMemoryDao<>();
         UserService         userService = new UserService(new InMemoryUserDao());
+        AuctionRegistry     auctionRegistry = new AuctionRegistry();
 
-        auctionService = new AuctionService(itemDao, auctionDao, userService);
+        auctionService = new AuctionService(itemDao, auctionDao, userService, auctionRegistry);
     }
 
     @AfterAll
     static void tearDownAll() {
-        AuctionManager.resetInstance();
         AuctionEventDispatcher.resetInstance();
     }
 
@@ -291,6 +289,82 @@ class AuctionServiceTest {
         assertEquals(3, history.size());
     }
 
+    // ==================== Concurrent Bidding ====================
+
+    /**
+     * Test concurrent bidding qua SERVICE LAYER — nơi ReentrantLock thực sự
+     * bảo vệ Auction khỏi race condition.
+     *
+     * <p>Trước đây test này nằm ở AuctionTest (tầng Model), nhưng sau khi
+     * refactoring chuyển concurrency (ReentrantLock) từ Model sang Service,
+     * test phải gọi qua {@code auctionService.placeBid()} để đi qua lock.
+     *
+     * <p><b>Kịch bản:</b> 10 thread cùng bid đồng thời. Service phải đảm bảo:
+     * <ul>
+     *   <li>Không lost update (mỗi bid thành công phải cao hơn bid trước)</li>
+     *   <li>Có ít nhất 1 bid thành công</li>
+     *   <li>Các bid thất bại ném exception (không null return)</li>
+     * </ul>
+     */
+    @Test
+    @DisplayName("Concurrent bidding qua service: không bị lost update")
+    void testConcurrentBidding() throws InterruptedException {
+        Auction auction = auctionService.createAuction(
+                "item-concurrent", "seller-concurrent", "Concurrent Test",
+                1000.0,
+                LocalDateTime.now(),
+                LocalDateTime.now().plusHours(1));
+
+        int numThreads = 10;
+        Thread[] threads = new Thread[numThreads];
+        // Đếm số bid thành công và thất bại
+        java.util.concurrent.atomic.AtomicInteger successCount = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger failCount = new java.util.concurrent.atomic.AtomicInteger();
+
+        for (int i = 0; i < numThreads; i++) {
+            final int idx = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    // Mỗi thread bid một giá khác nhau
+                    auctionService.placeBid(
+                            auction.getId(),
+                            "bidder-" + idx,
+                            "User" + idx,
+                            1000.0 + (idx + 1) * 100);
+                    successCount.incrementAndGet();
+                } catch (InvalidBidException | AuctionClosedException e) {
+                    // Bid thất bại (giá thấp hơn do thread khác bid trước) — hợp lệ
+                    failCount.incrementAndGet();
+                }
+            });
+        }
+
+        // Start tất cả thread đồng thời
+        for (Thread t : threads) t.start();
+        for (Thread t : threads) t.join();
+
+        // Phải có ít nhất 1 bid thành công
+        assertTrue(successCount.get() > 0,
+                "Phải có ít nhất 1 bid thành công, success=" + successCount.get());
+        // Tổng = success + fail = numThreads (không mất thread nào)
+        assertEquals(numThreads, successCount.get() + failCount.get(),
+                "Tổng success + fail phải = " + numThreads);
+
+        // Verify giá cao nhất > giá khởi điểm
+        Optional<Auction> result = auctionService.getAuction(auction.getId());
+        assertTrue(result.isPresent());
+        assertTrue(result.get().getCurrentHighestBid() > 1000.0,
+                "Giá phải cao hơn giá khởi điểm sau concurrent bidding");
+
+        // Verify lịch sử bid tăng dần (không bị lost update)
+        List<BidTransaction> history = auctionService.getBidHistory(auction.getId());
+        assertTrue(history.size() > 0, "Phải có ít nhất 1 bid trong history");
+        for (int i = 1; i < history.size(); i++) {
+            assertTrue(history.get(i).getBidAmount() > history.get(i - 1).getBidAmount(),
+                    "Mỗi bid phải cao hơn bid trước đó (no lost update)");
+        }
+    }
+
     // ==================== Regression: 2 client cùng auto-bid ====================
 
     /**
@@ -303,7 +377,7 @@ class AuctionServiceTest {
             throws InvalidBidException, AuctionClosedException {
         CountingAuctionDao countingDao = new CountingAuctionDao();
         UserService userSvc = new UserService(new InMemoryUserDao());
-        AuctionService svc = new AuctionService(new InMemoryDao<Item>(), countingDao, userSvc);
+        AuctionService svc = new AuctionService(new InMemoryDao<Item>(), countingDao, userSvc, new AuctionRegistry());
 
         Auction auction = svc.createAuction("item-x", "seller-x", "Burst Test",
                 1000.0, LocalDateTime.now(), LocalDateTime.now().plusHours(1));

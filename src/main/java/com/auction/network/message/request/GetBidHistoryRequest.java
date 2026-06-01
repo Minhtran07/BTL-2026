@@ -1,7 +1,6 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
+/** Request lấy lịch sử bid của 1 phiên đấu giá theo auctionId. */
 public class GetBidHistoryRequest extends Request {
     private static final long serialVersionUID = 1L;
 

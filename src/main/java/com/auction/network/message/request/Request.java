@@ -1,4 +1,6 @@
-package com.auction.network.message;
+package com.auction.network.message.request;
+
+import com.auction.network.message.Message;
 
 import java.util.UUID;
 

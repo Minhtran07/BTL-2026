@@ -53,9 +53,10 @@
                     <VBox styleClass="card" spacing="8" VBox.vgrow="ALWAYS">
                         <Label text="Biểu đồ giá theo thời gian" styleClass="section-title"/>
                         <LineChart fx:id="priceChart" VBox.vgrow="ALWAYS"
+                                   minHeight="280" prefHeight="320"
                                    animated="false" createSymbols="true" legendVisible="false">
-                            <xAxis><CategoryAxis fx:id="xAxis" label="Thời gian"/></xAxis>
-                            <yAxis><NumberAxis fx:id="yAxis" label="Giá (VNĐ)" autoRanging="true"/></yAxis>
+                            <xAxis><CategoryAxis fx:id="xAxis" label="Thời gian" tickLabelRotation="-45"/></xAxis>
+                            <yAxis><NumberAxis fx:id="yAxis" label="Giá (VNĐ)" autoRanging="true" side="LEFT"/></yAxis>
                         </LineChart>
                     </VBox>
                 </VBox>

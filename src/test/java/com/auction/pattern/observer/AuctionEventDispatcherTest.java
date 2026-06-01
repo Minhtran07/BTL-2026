@@ -1,5 +1,8 @@
 package com.auction.pattern.observer;
 
+import com.auction.pattern.singleton.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
+import com.auction.pattern.singleton.observer.AuctionObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

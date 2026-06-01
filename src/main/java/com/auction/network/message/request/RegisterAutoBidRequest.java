@@ -1,7 +1,10 @@
 package com.auction.network.message.request;
 
-import com.auction.network.message.Request;
-
+/**
+ * Request đăng ký auto-bid — chứa auctionId, giá tối đa, bước giá.
+ * Handler: {@link com.auction.network.handler.RegisterAutoBidHandler}
+ * <p>Server tự đặt giá mỗi khi có người bid cao hơn, cho đến khi đạt maxBid.
+ */
 public class RegisterAutoBidRequest extends Request {
     private static final long serialVersionUID = 1L;
 

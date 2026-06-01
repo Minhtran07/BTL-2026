@@ -13,13 +13,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * AUCTIONTEST - UNIT TEST CHO LỚP AUCTION (PHIÊN ĐẤU GIÁ)
  * ============================================================================
  *
- * <p>Test các logic phức tạp của Auction:
+ * <p>Test các logic phức tạp của Auction MODEL (tầng domain):
  * <ul>
  *   <li>Logic đặt giá (bid validation, state machine)</li>
- *   <li>Concurrent bidding (ReentrantLock - 2 thread cùng bid)</li>
  *   <li>Anti-sniping algorithm (gia hạn khi bid cuối giờ)</li>
  *   <li>Auto-bid burst (chain reaction giữa các auto-bidder)</li>
  * </ul>
+ *
+ * <p><b>Lưu ý:</b> Concurrent bidding test đã chuyển sang
+ * {@code AuctionServiceTest} vì concurrency (ReentrantLock) do tầng
+ * Service quản lý, không phải tầng Model.
  *
  * <p><b>JUnit 5 lifecycle:</b>
  * <ul>
@@ -245,32 +248,32 @@ class AuctionTest {
         assertTrue(autoBids.isEmpty(), "Auto-bid không được vượt maxBid");
     }
 
-    // ==================== Concurrent Bidding ====================
+    // ==================== Sequential Bidding (Concurrent moved to AuctionServiceTest) ====================
 
+    /**
+     * Test đặt giá tuần tự — chỉ kiểm tra logic model (không có lock).
+     *
+     * <p><b>Lưu ý:</b> Test concurrent bidding đã chuyển sang
+     * {@code AuctionServiceTest.testConcurrentBidding()} vì concurrency
+     * (ReentrantLock) được quản lý ở tầng Service, không phải tầng Model.
+     * Model chỉ chịu trách nhiệm validate logic bid (giá phải tăng,
+     * không phải seller, trạng thái RUNNING).
+     */
     @Test
-    @DisplayName("Concurrent bidding: không bị lost update")
-    void testConcurrentBidding() throws InterruptedException {
-        int numThreads = 10;
-        Thread[] threads = new Thread[numThreads];
-
-        for (int i = 0; i < numThreads; i++) {
-            final int idx = i;
-            threads[i] = new Thread(() -> {
-                auction.placeBid("bidder-" + idx, "User" + idx, 1000.0 + (idx + 1) * 100);
-            });
+    @DisplayName("Sequential bidding: giá phải luôn tăng dần")
+    void testSequentialBidding() {
+        int numBids = 10;
+        for (int i = 0; i < numBids; i++) {
+            auction.placeBid("bidder-" + i, "User" + i, 1000.0 + (i + 1) * 100);
         }
 
-        // Start all threads simultaneously
-        for (Thread t : threads) t.start();
-        for (Thread t : threads) t.join();
+        // Giá cao nhất phải là bid cuối cùng (2000.0)
+        assertEquals(2000.0, auction.getCurrentHighestBid(),
+                "Giá cao nhất phải là bid cuối cùng");
+        assertEquals("bidder-9", auction.getCurrentHighestBidderId());
+        assertEquals(numBids, auction.getTotalBids());
 
-        // Giá cao nhất phải là bid lớn nhất thành công
-        assertTrue(auction.getCurrentHighestBid() > 1000.0,
-                "Giá phải cao hơn giá khởi điểm sau concurrent bidding");
-        assertTrue(auction.getTotalBids() > 0,
-                "Phải có ít nhất 1 bid thành công");
-
-        // Verify không có 2 bid cùng giá
+        // Verify lịch sử bid tăng dần
         List<BidTransaction> history = auction.getBidHistory();
         for (int i = 1; i < history.size(); i++) {
             assertTrue(history.get(i).getBidAmount() > history.get(i - 1).getBidAmount(),
