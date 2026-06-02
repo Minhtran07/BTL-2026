@@ -27,11 +27,32 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build with Maven
-        run: mvn compile -B
+      # Chạy verify để kích hoạt cả Unit Test, Integration Test, Checkstyle và JaCoCo
+      - name: Build and Verify with Maven
+        run: mvn clean verify -B
 
-      - name: Run tests
-        run: mvn test -B
+      # 1. Lưu lại file sản phẩm .jar/.war (Chỉ cần lưu từ 1 OS là đủ, ví dụ Ubuntu)
+      - name: Upload Build Artifact
+        if: matrix.os == 'ubuntu-latest' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-app-package
+          path: target/*.jar # Hoặc *.war
 
-      - name: Package
-        run: mvn package -B -DskipTests
+      # 2. Lưu báo cáo Checkstyle (Được kích hoạt ở tất cả các OS để kiểm tra xem có OS nào bị lỗi xuống dòng/định dạng không)
+      - name: Upload Checkstyle Report
+        if: always() # Luôn chạy kể cả khi bước verify bị fail (để bạn vào xem lý do fail do checkstyle)
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkstyle-report-${{ matrix.os }}
+          path: |
+            target/checkstyle-result.xml
+            target/site/checkstyle.html
+
+      # 3. Lưu báo cáo JaCoCo Code Coverage
+      - name: Upload JaCoCo Coverage Report
+        if: success() # Chỉ lưu khi test pass hoàn toàn
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report-${{ matrix.os }}
+          path: target/site/jacoco/ # Lưu nguyên cả thư mục chứa giao diện HTML trực quan
