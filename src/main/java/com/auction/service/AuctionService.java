@@ -14,9 +14,8 @@ import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.Bidder;
 import com.auction.model.user.Seller;
 import com.auction.pattern.factory.ItemFactory;
-import com.auction.pattern.observer.AuctionEvent;
-import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.singleton.AuctionRegistry;
+import com.auction.pattern.singleton.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
 import com.auction.pattern.strategy.BidValidationStrategy;
 import com.auction.pattern.strategy.StandardBidValidation;
 
@@ -37,7 +36,7 @@ import com.google.common.cache.CacheBuilder;
  *
  * <p><b>Vai trò:</b> đóng vai trò facade giữa tầng UI/controller và tầng
  * domain/DAO. Service không tự cache state mà uỷ thác cho {@link AuctionRegistry}
- * (singleton in-memory) và DAO ({@link AuctionDaoImpl}).
+ * (cache in-memory) và DAO ({@link AuctionDaoImpl}).
  *
  * <p><b>Tích hợp design patterns:</b>
  * <ul>
@@ -45,7 +44,7 @@ import com.google.common.cache.CacheBuilder;
  *   <li><b>Strategy</b> — {@link BidValidationStrategy} cho luật validate bid</li>
  *   <li><b>Observer</b> — {@link AuctionEventDispatcher} broadcast các sự kiện
  *       NEW_BID / AUTO_BID / AUCTION_STARTED / AUCTION_ENDED / AUCTION_CANCELED</li>
- *   <li><b>Singleton</b> — {@link AuctionRegistry}, {@link AuctionEventDispatcher}</li>
+ *   <li><b>Singleton</b> — {@link AuctionEventDispatcher}</li>
  * </ul>
  *
  * <p><b>Thanh toán (settlement):</b> Khi {@link #endAuction(String)} được gọi,
@@ -91,34 +90,25 @@ public class AuctionService {
         }
     }
 
-    /** Constructor mặc định (production). */
-    public AuctionService() {
+    /** Constructor (production). */
+    public AuctionService(UserService userService) {
         this.itemDao        = new ItemDaoImpl();
         this.auctionDao     = new AuctionDaoImpl();
-        this.userService    = new UserService();
-        this.auctionRegistry = AuctionRegistry.getInstance();
+        this.userService    = userService;
+        this.auctionRegistry = new AuctionRegistry();
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator   = new StandardBidValidation();
-    }
-
-    /**
-     * Constructor injection cho unit tests (2 DAOs, tự tạo UserService).
-     * Khi UserService sử dụng DAO mặc định (file-based) và người dùng không
-     * tồn tại trong file, settlement sẽ silently no-op — hành vi an toàn cho tests.
-     */
-    public AuctionService(GenericDao<Item> itemDao, GenericDao<Auction> auctionDao) {
-        this(itemDao, auctionDao, new UserService());
     }
 
     /**
      * Constructor injection đầy đủ (dùng trong tests yêu cầu settlement kiểm chứng được).
      */
     public AuctionService(GenericDao<Item> itemDao, GenericDao<Auction> auctionDao,
-                          UserService userService) {
+                          UserService userService, AuctionRegistry auctionRegistry) {
         this.itemDao         = itemDao;
         this.auctionDao      = auctionDao;
         this.userService     = userService;
-        this.auctionRegistry = AuctionRegistry.getInstance();
+        this.auctionRegistry = auctionRegistry;
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator    = new StandardBidValidation();
     }
@@ -494,10 +484,6 @@ public class AuctionService {
                 auction.cancel();
                 auctionDao.update(auction);
                 isCanceledSuccessfully = true;
-                eventDispatcher.dispatch(new AuctionEvent(
-                    AuctionEvent.EventType.AUCTION_CANCELED,
-                    auctionId,
-                    "Phiên đấu giá đã bị hủy"));
             }
         } finally {
             lock.unlock();

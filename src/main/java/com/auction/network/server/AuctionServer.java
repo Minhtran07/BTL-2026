@@ -7,6 +7,7 @@ import com.auction.network.message.push.PushForwarder;
 import com.auction.network.message.push.PushListener;
 import com.auction.network.message.request.*;
 import com.auction.network.handler.*;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
 import com.auction.service.AuctionService;
 import com.auction.service.UserService;
 
@@ -93,7 +94,7 @@ public class AuctionServer {
     public AuctionServer(int port) {
         this.port = port;
         this.userService = new UserService();
-        this.auctionService = new AuctionService();
+        this.auctionService = new AuctionService(userService);
         this.threadPool = Executors.newCachedThreadPool();
         this.handlerMap = buildHandlerMap();
     }

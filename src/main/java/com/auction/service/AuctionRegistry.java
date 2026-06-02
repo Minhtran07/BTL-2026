@@ -1,4 +1,4 @@
-package com.auction.pattern.singleton;
+package com.auction.service;
 
 import com.auction.model.auction.Auction;
 import com.auction.model.auction.AuctionStatus;
@@ -13,35 +13,25 @@ import java.util.stream.Collectors;
 
 /**
  * ============================================================================
- * AUCTIONMANAGER - SINGLETON QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ
+ * AUCTIONREGISTRY - QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ TRÊN RAM
  * ============================================================================
  *
- * <p>Đây là class áp dụng <b>SINGLETON PATTERN</b> - chỉ tồn tại 1 instance
- * duy nhất trong toàn JVM. Vai trò: quản lý "in-memory cache" của các phiên
- * đấu giá đang hoạt động.
+ * <p>Cache in-memory các phiên đấu giá đang hoạt động bằng {@link Cache}
+ * (Guava). Tự động evict phiên không được truy cập sau 10 phút, giảm
+ * áp lực bộ nhớ mà không cần quản lý vòng đời thủ công.
  *
- * <p><b>SINGLETON PATTERN LÀ GÌ?</b> Đảm bảo 1 class chỉ có 1 instance, cung
- * cấp 1 điểm truy cập toàn cục. Áp dụng khi:
- * <ul>
- *   <li>Cần quản lý tài nguyên dùng chung (DB connection, cache, scheduler...)</li>
- *   <li>Tránh tạo nhiều instance lãng phí bộ nhớ</li>
- *   <li>Cần một "registry" trung tâm</li>
- * </ul>
+ * <p><b>TẠI SAO DÙNG GUAVA CACHE?</b>
+ * Guava Cache nội bộ dùng ConcurrentHashMap - an toàn cho việc đọc/ghi
+ * song song trong môi trường multi-thread (server xử lý nhiều client
+ * cùng lúc) mà không cần lock toàn bộ. Ngoài ra còn hỗ trợ tự động
+ * eviction theo thời gian truy cập, giúp giải phóng RAM cho các phiên
+ * đã kết thúc.
  *
- * <p><b>TẠI SAO DÙNG ConcurrentHashMap?</b>
- * Trong môi trường multi-thread (server xử lý nhiều client cùng lúc),
- * HashMap thường sẽ gây ConcurrentModificationException. ConcurrentHashMap
- * an toàn cho việc đọc/ghi song song mà không cần lock toàn bộ.
- *
+ * <p><b>Lưu ý:</b> Class này KHÔNG phải Singleton. Mỗi {@code AuctionService}
+ * sở hữu một instance riêng, cho phép test dễ dàng bằng cách inject
+ * instance mới cho mỗi test case.
  */
 public class AuctionRegistry {
-
-    /**
-     * Instance Singleton.
-     * <b>volatile</b> đảm bảo các thread nhìn thấy giá trị mới nhất (memory visibility).
-     */
-    private static volatile AuctionRegistry instance;
-
     /**
      * Cache các phiên đấu giá trong RAM thay cho ConcurrentHashMap.
      * Key = auctionId, Value = Auction object.
@@ -55,36 +45,14 @@ public class AuctionRegistry {
     private final ScheduledExecutorService scheduler;
 
     /**
-     * Constructor PRIVATE - đặc trưng Singleton.
-     * Khởi tạo map rỗng + scheduler, sau đó bắt đầu task monitor.
+     * Khởi tạo cache rỗng + scheduler cho các task định thời (mở/đóng phòng).
      */
-    private AuctionRegistry() {
+    public AuctionRegistry() {
         // Khởi tạo Guava Cache: Tự động đuổi khứ bản ghi ra khỏi RAM nếu sau 10 phút không ai đọc/ghi
         this.auctionCache = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .build();
         this.scheduler = Executors.newScheduledThreadPool(2);
-    }
-
-    /**
-     * Lấy instance Singleton - dùng Double-Checked Locking (DCL).
-     *
-     * <p><b>DCL pattern:</b>
-     * <ul>
-     *   <li>Lần 1 (ngoài lock): nếu instance đã có → trả về luôn (không tốn lock)</li>
-     *   <li>Vào lock</li>
-     *   <li>Lần 2 (trong lock): kiểm tra lại để tránh 2 thread cùng tạo instance</li>
-     * </ul>
-     */
-    public static AuctionRegistry getInstance() {
-        if (instance == null) {
-            synchronized (AuctionRegistry.class) {
-                if (instance == null) {
-                    instance = new AuctionRegistry();
-                }
-            }
-        }
-        return instance;
     }
 
     /**
@@ -166,20 +134,6 @@ public class AuctionRegistry {
             scheduler.shutdownNow();
             // Preserve interrupt flag - quan trọng để thread cha biết bị interrupt
             Thread.currentThread().interrupt();
-        }
-    }
-
-    /**
-     * Reset instance về null - CHỈ DÙNG TRONG UNIT TEST.
-     *
-     * <p>Singleton pattern thông thường KHÔNG có resetInstance() vì phá vỡ
-     * tính "duy nhất". Tuy nhiên trong test, mỗi test cần state sạch nên
-     * cần reset. Đánh dấu rõ là chỉ dùng trong test để tránh lạm dụng.
-     */
-    public static synchronized void resetInstance() {
-        if (instance != null) {
-            instance.shutdown();
-            instance = null;
         }
     }
 }

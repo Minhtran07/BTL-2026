@@ -1,4 +1,4 @@
-package com.auction.pattern.observer;
+package com.auction.pattern.singleton.observer;
 
 import java.util.List;
 import java.util.Map;

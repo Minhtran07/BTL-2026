@@ -11,8 +11,7 @@ import com.auction.model.item.Item;
 import com.auction.model.item.ItemCategory;
 import com.auction.model.transaction.BidTransaction;
 import com.auction.model.user.User;
-import com.auction.pattern.observer.AuctionEventDispatcher;
-import com.auction.pattern.singleton.AuctionRegistry;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
 import org.junit.jupiter.api.*;
 
 import java.time.LocalDateTime;
@@ -58,19 +57,18 @@ class AuctionServiceTest {
     void setUp() {
         // Reset Singletons để tránh side effects giữa các test
         AuctionEventDispatcher.resetInstance();
-        AuctionRegistry.resetInstance();
 
         // Tất cả DAOs đều in-memory — không chạm file hệ thống
         GenericDao<Item>    itemDao    = new InMemoryDao<>();
         GenericDao<Auction> auctionDao = new InMemoryDao<>();
         UserService         userService = new UserService(new InMemoryUserDao());
+        AuctionRegistry     auctionRegistry = new AuctionRegistry();
 
-        auctionService = new AuctionService(itemDao, auctionDao, userService);
+        auctionService = new AuctionService(itemDao, auctionDao, userService, auctionRegistry);
     }
 
     @AfterAll
     static void tearDownAll() {
-        AuctionRegistry.resetInstance();
         AuctionEventDispatcher.resetInstance();
     }
 
@@ -291,7 +289,7 @@ class AuctionServiceTest {
         assertEquals(3, history.size());
     }
 
-    // ==================== Concurrent Bidding (moved from AuctionTest) ====================
+    // ==================== Concurrent Bidding ====================
 
     /**
      * Test concurrent bidding qua SERVICE LAYER — nơi ReentrantLock thực sự
@@ -379,7 +377,7 @@ class AuctionServiceTest {
             throws InvalidBidException, AuctionClosedException {
         CountingAuctionDao countingDao = new CountingAuctionDao();
         UserService userSvc = new UserService(new InMemoryUserDao());
-        AuctionService svc = new AuctionService(new InMemoryDao<Item>(), countingDao, userSvc);
+        AuctionService svc = new AuctionService(new InMemoryDao<Item>(), countingDao, userSvc, new AuctionRegistry());
 
         Auction auction = svc.createAuction("item-x", "seller-x", "Burst Test",
                 1000.0, LocalDateTime.now(), LocalDateTime.now().plusHours(1));
