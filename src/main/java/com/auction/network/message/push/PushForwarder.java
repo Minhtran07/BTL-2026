@@ -2,6 +2,7 @@ package com.auction.network.message.push;
 
 import com.auction.network.message.Message;
 import com.auction.pattern.singleton.observer.AuctionEvent;
+import com.auction.pattern.singleton.observer.AuctionEventDispatcher;
 import com.auction.pattern.singleton.observer.AuctionObserver;
 
 import java.util.List;
@@ -46,6 +47,7 @@ public class PushForwarder implements AuctionObserver {
 
     public PushForwarder() {
         subscriptions = new ConcurrentHashMap<>();
+        AuctionEventDispatcher.getInstance().subscribeGlobal(this);
     }
 
     /**
