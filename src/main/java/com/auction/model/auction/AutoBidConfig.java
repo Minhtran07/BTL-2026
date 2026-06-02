@@ -59,7 +59,7 @@ import java.time.LocalDateTime;
  *
  * @author  Auction Team
  */
-public class AutoBidConfig implements Serializable {
+public class AutoBidConfig implements Serializable, Comparable<AutoBidConfig> {
 
     /**
      * UID cho cơ chế serialization của Java.
@@ -211,6 +211,14 @@ public class AutoBidConfig implements Serializable {
      *
      * @return chuỗi dạng "AutoBid[bidder=..., maxBid=..., increment=...]"
      */
+    /**
+     * So sánh theo thời điểm đăng ký (FIFO) - dùng cho PriorityQueue.
+     */
+    @Override
+    public int compareTo(AutoBidConfig other) {
+        return this.registeredAt.compareTo(other.registeredAt);
+    }
+
     @Override
     public String toString() {
         return String.format("AutoBid[bidder=%s, maxBid=%.2f, increment=%.2f]",
