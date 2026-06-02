@@ -90,7 +90,7 @@ public class AuctionService {
         }
     }
 
-    /** Constructor mặc định (production). */
+    /** Constructor (production). */
     public AuctionService(UserService userService) {
         this.itemDao        = new ItemDaoImpl();
         this.auctionDao     = new AuctionDaoImpl();
