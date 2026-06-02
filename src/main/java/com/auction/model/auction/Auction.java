@@ -12,6 +12,7 @@ import java.time.LocalDateTime;    // Kiểu lưu thời gian (ngày + giờ) ch
 import java.util.ArrayList;        // List dạng mảng động
 import java.util.Collections;      // Tiện ích cho Collection (unmodifiableList...)
 import java.util.List;             // Interface List
+import java.util.PriorityQueue;    // Hàng đợi ưu tiên - tự sắp xếp theo thứ tự đăng ký
 
 /**
  * ============================================================================
@@ -132,8 +133,8 @@ public class Auction extends Entity {
     /** Đếm số lần đã gia hạn (cho thống kê / debug). */
     private int snipeExtensionCount;
 
-    /** Danh sách config auto-bid (mỗi bidder có thể có 1 config). */
-    private final List<AutoBidConfig> autoBids;
+    /** Hàng đợi ưu tiên auto-bid - tự sắp xếp theo thời điểm đăng ký (FIFO). */
+    private final PriorityQueue<AutoBidConfig> autoBids;
 
     /**
      * Constructor mặc định - cho Java Serialization và unit test.
@@ -142,7 +143,7 @@ public class Auction extends Entity {
     public Auction() {
         super();
         this.bidHistory = new ArrayList<>();
-        this.autoBids = new ArrayList<>();
+        this.autoBids = new PriorityQueue<>();
         this.status = AuctionStatus.OPEN;
         // true = fair lock: thread chờ trước thì được lock trước
         this.antiSnipingEnabled = true;
@@ -173,7 +174,7 @@ public class Auction extends Entity {
         this.endTime = endTime;
         this.status = AuctionStatus.OPEN;
         this.bidHistory = new ArrayList<>();
-        this.autoBids = new ArrayList<>();
+        this.autoBids = new PriorityQueue<>();
         this.antiSnipingEnabled = true;
         this.totalBids = 0;
         this.snipeExtensionCount = 0;
@@ -367,13 +368,13 @@ public class Auction extends Entity {
         while (anyBidPlaced) {
             anyBidPlaced = false;
 
-            // Sắp xếp auto-bid theo thời điểm đăng ký (FIFO tiebreaker)
-            // Ai đăng ký trước có lợi thế "lên giá" trước
-            List<AutoBidConfig> sorted = new ArrayList<>(autoBids);
-            sorted.sort((a, b) -> a.getRegisteredAt().compareTo(b.getRegisteredAt()));
+            // Tạo bản sao PriorityQueue → poll() lấy ra theo thứ tự FIFO
+            // PriorityQueue tự sắp xếp nhờ AutoBidConfig implements Comparable
+            PriorityQueue<AutoBidConfig> sorted = new PriorityQueue<>(autoBids);
 
-            // Duyệt qua từng auto-bid
-            for (AutoBidConfig autoBid : sorted) {
+            // Poll từng auto-bid theo thứ tự đăng ký (FIFO)
+            while (!sorted.isEmpty()) {
+                AutoBidConfig autoBid = sorted.poll();
                 // Bỏ qua người vừa trigger (tránh phản lại chính mình)
                 if (autoBid.getBidderId().equals(excludeBidderId)) continue;
                 // Bỏ qua người đang dẫn đầu (không cần bid thêm)
@@ -474,7 +475,7 @@ public class Auction extends Entity {
     public int getSnipeExtensionCount() { return snipeExtensionCount; }
 
     public List<AutoBidConfig> getAutoBids() {
-        return Collections.unmodifiableList(autoBids);
+        return Collections.unmodifiableList(new ArrayList<>(autoBids));
     }
 
     /**
