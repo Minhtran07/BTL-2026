@@ -94,10 +94,9 @@ public class AuctionServer {
     public AuctionServer(int port) {
         this.port = port;
         this.userService = new UserService();
-        this.auctionService = new AuctionService();
+        this.auctionService = new AuctionService(userService);
         this.threadPool = Executors.newCachedThreadPool();
         this.handlerMap = buildHandlerMap();
-        AuctionEventDispatcher.getInstance().subscribeGlobal(forwarder);
     }
 
     /**

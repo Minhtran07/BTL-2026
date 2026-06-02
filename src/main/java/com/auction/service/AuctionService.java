@@ -91,10 +91,10 @@ public class AuctionService {
     }
 
     /** Constructor mặc định (production). */
-    public AuctionService() {
+    public AuctionService(UserService userService) {
         this.itemDao        = new ItemDaoImpl();
         this.auctionDao     = new AuctionDaoImpl();
-        this.userService    = new UserService();
+        this.userService    = userService;
         this.auctionRegistry = new AuctionRegistry();
         this.eventDispatcher = AuctionEventDispatcher.getInstance();
         this.bidValidator   = new StandardBidValidation();
