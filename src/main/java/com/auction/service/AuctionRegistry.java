@@ -13,14 +13,23 @@ import java.util.stream.Collectors;
 
 /**
  * ============================================================================
- * AUCTIONREGISTRY - QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ
+ * AUCTIONREGISTRY - QUẢN LÝ TOÀN BỘ PHIÊN ĐẤU GIÁ TRÊN RAM
  * ============================================================================
  *
- * <p><b>TẠI SAO DÙNG ConcurrentHashMap?</b>
- * Trong môi trường multi-thread (server xử lý nhiều client cùng lúc),
- * HashMap thường sẽ gây ConcurrentModificationException. ConcurrentHashMap
- * an toàn cho việc đọc/ghi song song mà không cần lock toàn bộ.
+ * <p>Cache in-memory các phiên đấu giá đang hoạt động bằng {@link Cache}
+ * (Guava). Tự động evict phiên không được truy cập sau 10 phút, giảm
+ * áp lực bộ nhớ mà không cần quản lý vòng đời thủ công.
  *
+ * <p><b>TẠI SAO DÙNG GUAVA CACHE?</b>
+ * Guava Cache nội bộ dùng ConcurrentHashMap - an toàn cho việc đọc/ghi
+ * song song trong môi trường multi-thread (server xử lý nhiều client
+ * cùng lúc) mà không cần lock toàn bộ. Ngoài ra còn hỗ trợ tự động
+ * eviction theo thời gian truy cập, giúp giải phóng RAM cho các phiên
+ * đã kết thúc.
+ *
+ * <p><b>Lưu ý:</b> Class này KHÔNG phải Singleton. Mỗi {@code AuctionService}
+ * sở hữu một instance riêng, cho phép test dễ dàng bằng cách inject
+ * instance mới cho mỗi test case.
  */
 public class AuctionRegistry {
     /**
@@ -36,8 +45,7 @@ public class AuctionRegistry {
     private final ScheduledExecutorService scheduler;
 
     /**
-     * Constructor PRIVATE - đặc trưng Singleton.
-     * Khởi tạo map rỗng + scheduler, sau đó bắt đầu task monitor.
+     * Khởi tạo cache rỗng + scheduler cho các task định thời (mở/đóng phòng).
      */
     public AuctionRegistry() {
         // Khởi tạo Guava Cache: Tự động đuổi khứ bản ghi ra khỏi RAM nếu sau 10 phút không ai đọc/ghi

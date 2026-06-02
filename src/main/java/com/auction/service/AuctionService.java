@@ -36,7 +36,7 @@ import com.google.common.cache.CacheBuilder;
  *
  * <p><b>Vai trò:</b> đóng vai trò facade giữa tầng UI/controller và tầng
  * domain/DAO. Service không tự cache state mà uỷ thác cho {@link AuctionRegistry}
- * (singleton in-memory) và DAO ({@link AuctionDaoImpl}).
+ * (cache in-memory) và DAO ({@link AuctionDaoImpl}).
  *
  * <p><b>Tích hợp design patterns:</b>
  * <ul>
@@ -44,7 +44,7 @@ import com.google.common.cache.CacheBuilder;
  *   <li><b>Strategy</b> — {@link BidValidationStrategy} cho luật validate bid</li>
  *   <li><b>Observer</b> — {@link AuctionEventDispatcher} broadcast các sự kiện
  *       NEW_BID / AUTO_BID / AUCTION_STARTED / AUCTION_ENDED / AUCTION_CANCELED</li>
- *   <li><b>Singleton</b> — {@link AuctionRegistry}, {@link AuctionEventDispatcher}</li>
+ *   <li><b>Singleton</b> — {@link AuctionEventDispatcher}</li>
  * </ul>
  *
  * <p><b>Thanh toán (settlement):</b> Khi {@link #endAuction(String)} được gọi,
@@ -484,10 +484,6 @@ public class AuctionService {
                 auction.cancel();
                 auctionDao.update(auction);
                 isCanceledSuccessfully = true;
-                eventDispatcher.dispatch(new AuctionEvent(
-                    AuctionEvent.EventType.AUCTION_CANCELED,
-                    auctionId,
-                    "Phiên đấu giá đã bị hủy"));
             }
         } finally {
             lock.unlock();
