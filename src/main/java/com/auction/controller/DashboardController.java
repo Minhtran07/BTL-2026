@@ -79,6 +79,9 @@ public class DashboardController {
     /** Timer cục bộ cập nhật countdown trên card mỗi giây (không gọi server). */
     private Timer countdownTimer;
 
+    /** Timer polling server mỗi 5s để đồng bộ dữ liệu mới. */
+    private Timer syncTimer;
+
     /** Cache danh sách auction để hiển thị + filter local. */
     private List<Auction> currentAuctions = List.of();
 
@@ -167,7 +170,6 @@ public class DashboardController {
         refreshAuctionList();
 
         // Timer cục bộ 1s — chỉ cập nhật countdown trên card, KHÔNG gọi server.
-        // Dữ liệu thực (giá, trạng thái) được cập nhật qua push listener ở trên.
         countdownTimer = new Timer(true);
         countdownTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -178,6 +180,18 @@ public class DashboardController {
                 });
             }
         }, 1000, 1000);
+
+        // Timer polling 5s — gọi server lấy data mới (giá, trạng thái, bid count).
+        syncTimer = new Timer(true);
+        syncTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                Platform.runLater(() -> {
+                    if (auctionFlowPane == null || auctionFlowPane.getScene() == null) return;
+                    refreshAuctionList();
+                });
+            }
+        }, 5000, 5000);
 
         // Lắng nghe khi scene bị remove (user navigate đi nơi khác) → cleanup
         // để tránh memory leak (timer + listener vẫn chạy ngầm)
@@ -196,6 +210,10 @@ public class DashboardController {
         if (countdownTimer != null) {
             countdownTimer.cancel();
             countdownTimer = null;
+        }
+        if (syncTimer != null) {
+            syncTimer.cancel();
+            syncTimer = null;
         }
         auctionClientService.removePushListener(serverListener);
     }
