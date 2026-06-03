@@ -43,7 +43,6 @@ src/main/java/com/auction/
 │   ├── AuctionDetailController.java
 │   ├── CreateAuctionController.java
 │   ├── EditItemController.java
-│   ├── FinanceController.java
 │   └── AdminController.java
 ├── model/                        # Domain model
 │   ├── entity/Entity.java        # Base entity
@@ -71,7 +70,14 @@ src/main/java/com/auction/
 ├── pattern/                      # Design Patterns
 │   ├── factory/                  # Factory Method — tạo Item theo category
 │   ├── singleton/observer/       # SingletonxObserver — AuctionEventDispatcher, realtime event
-│   └── strategy/                 # Strategy — BidValidationStrategy
+│   └── strategy/                 # Strategy — BidValidationStrategy, CategoryFormStrategy
+│       ├── BidValidationStrategy.java       # Validate giá đấu
+│       ├── CategoryFormStrategy.java        # Form động theo danh mục (interface)
+│       ├── CategoryFormRegistry.java        # Registry tra cứu strategy (SOLID)
+│       ├── FormFieldHelper.java             # Utility tạo UI field
+│       ├── ElectronicsFormStrategy.java     # Form Điện tử
+│       ├── ArtFormStrategy.java             # Form Nghệ thuật
+│       └── VehicleFormStrategy.java         # Form Phương tiện
 ├── exception/                    # Custom exceptions
 └── util/                         # Tiện ích (PasswordUtils)
 
@@ -124,7 +130,8 @@ Lệnh này sẽ chạy toàn bộ unit test, kiểm tra code coverage (JaCoCo �
 
 ### Quản lý sản phẩm
 - Tạo sản phẩm (Art, Electronics, Vehicle) — Factory Method Pattern
-- Sửa / Xoá sản phẩm
+- Form động theo danh mục — Strategy Pattern (CategoryFormStrategy)
+- Sửa / Xoá sản phẩm (chặn sửa giá khi đã có bid)
 - Xem danh sách sản phẩm
 
 ### Đấu giá
@@ -152,3 +159,24 @@ Lệnh này sẽ chạy toàn bộ unit test, kiểm tra code coverage (JaCoCo �
 | **Factory Method** | `ItemFactory`, `ItemCreator` | Tạo Item theo category (Art, Electronics, Vehicle) |
 | **Observer** | `AuctionEventDispatcher`, `AuctionObserver` | Phát sự kiện đấu giá realtime |
 | **Strategy** | `BidValidationStrategy` | Chiến lược validate giá đấu (Standard, ReservePrice) |
+| **Strategy** | `CategoryFormStrategy`, `CategoryFormRegistry` | Form động theo danh mục sản phẩm khi tạo phiên đấu giá (tuân thủ SOLID) |
+
+### Anti-Sniping
+
+Cơ chế chống đặt giá sát giờ đóng: nếu có bid trong 30 giây cuối, phiên tự động gia hạn thêm 30 giây. Scheduler kiểm tra `endTime` thực tế trước khi đóng, re-schedule nếu đã được gia hạn.
+
+### Dashboard Auto-Refresh
+
+Dashboard tự động polling server mỗi 5 giây để cập nhật giá, trạng thái phiên, số lượt bid mà không cần reload thủ công.
+
+### Phân quyền
+
+- **Seller** không thể đặt bid hoặc auto-bid sản phẩm của mình
+- **Admin** không được phép đấu giá hay auto-bid — chỉ có quyền quản trị
+- Không cho phép sửa giá khởi điểm khi đã có người đặt bid
+
+### Unit Test
+
+- **141 test** bao gồm: model, entity, design pattern, strategy, factory, observer, service
+- Test concurrent: 10-20 luồng đồng thời trừ tiền / cộng doanh thu — đảm bảo thread-safety
+- In-memory DAO cho test isolation (không phụ thuộc file/DB)
