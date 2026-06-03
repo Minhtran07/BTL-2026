@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -286,6 +290,191 @@ class UserServiceTest {
     @DisplayName("Cộng doanh thu cho userId không tồn tại - không lỗi")
     void testAddSellerRevenue_NonExistentUser() {
         assertDoesNotThrow(() -> userService.addSellerRevenue("non-existent-id", 1000));
+    }
+
+    // ==================== Concurrent - Deduct Bidder Balance ====================
+
+    @Test
+    @DisplayName("Concurrent: 10 luồng đồng thời trừ tiền Bidder - không race condition")
+    void testDeductBidderBalance_Concurrent() throws Exception {
+        User user = userService.register("bidder_cc", "pass1234",
+                "bidder_cc@test.com", "Bidder CC", UserRole.BIDDER);
+        // Balance mặc định 1 tỷ, mỗi luồng trừ 100 triệu → tối đa 10 lần thành công
+        double deductAmount = 100_000_000;
+        int threadCount = 10;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);  // Đảm bảo tất cả chạy đồng thời
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // Chờ tín hiệu bắt đầu
+                    if (userService.deductBidderBalance(user.getId(), deductAmount)) {
+                        successCount.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();   // Bắn tín hiệu → tất cả chạy cùng lúc
+        doneLatch.await();        // Chờ tất cả xong
+        executor.shutdown();
+
+        Bidder updated = (Bidder) userService.findById(user.getId()).orElseThrow();
+        // Balance = 1 tỷ - (successCount * 100 triệu), phải >= 0
+        assertEquals(1_000_000_000.0 - successCount.get() * deductAmount,
+                updated.getBalance(), 0.01,
+                "Balance phải khớp: ban đầu - (số lần thành công × số tiền trừ)");
+        assertTrue(updated.getBalance() >= 0,
+                "Balance không được âm dù có nhiều luồng trừ đồng thời");
+        assertEquals(10, successCount.get(),
+                "Đúng 10 lần trừ 100tr từ 1 tỷ phải đều thành công");
+    }
+
+    @Test
+    @DisplayName("Concurrent: 20 luồng tranh nhau trừ tiền - chỉ đủ cho 10 lần")
+    void testDeductBidderBalance_Concurrent_Oversaturated() throws Exception {
+        User user = userService.register("bidder_ov", "pass1234",
+                "bidder_ov@test.com", "Bidder OV", UserRole.BIDDER);
+        // Balance 1 tỷ, mỗi lần trừ 100 triệu → chỉ đủ cho 10, 10 còn lại phải fail
+        double deductAmount = 100_000_000;
+        int threadCount = 20;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    if (userService.deductBidderBalance(user.getId(), deductAmount)) {
+                        successCount.incrementAndGet();
+                    } else {
+                        failCount.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        doneLatch.await();
+        executor.shutdown();
+
+        Bidder updated = (Bidder) userService.findById(user.getId()).orElseThrow();
+        assertEquals(0, updated.getBalance(), 0.01,
+                "Balance phải bằng 0 sau khi trừ hết");
+        assertEquals(10, successCount.get(),
+                "Chỉ đúng 10 lần trừ thành công từ 1 tỷ (mỗi lần 100tr)");
+        assertEquals(10, failCount.get(),
+                "10 lần còn lại phải thất bại do hết tiền");
+    }
+
+    // ==================== Concurrent - Add Seller Revenue ====================
+
+    @Test
+    @DisplayName("Concurrent: 10 luồng đồng thời cộng doanh thu Seller - không mất tiền")
+    void testAddSellerRevenue_Concurrent() throws Exception {
+        User user = userService.register("seller_cc", "pass1234",
+                "seller_cc@test.com", "Seller CC", UserRole.SELLER);
+        double addAmount = 500_000;
+        int threadCount = 10;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    userService.addSellerRevenue(user.getId(), addAmount);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        doneLatch.await();
+        executor.shutdown();
+
+        Seller updated = (Seller) userService.findById(user.getId()).orElseThrow();
+        assertEquals(threadCount * addAmount, updated.getTotalRevenue(), 0.01,
+                "Doanh thu phải bằng tổng tất cả các lần cộng, không được mất tiền");
+    }
+
+    @Test
+    @DisplayName("Concurrent: cộng trừ đồng thời trên Bidder và Seller khác nhau - không conflict")
+    void testConcurrent_DeductAndAdd_DifferentUsers() throws Exception {
+        User bidder = userService.register("bidder_mix", "pass1234",
+                "bidder_mix@test.com", "Bidder Mix", UserRole.BIDDER);
+        User seller = userService.register("seller_mix", "pass1234",
+                "seller_mix@test.com", "Seller Mix", UserRole.SELLER);
+        int threadCount = 10;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount * 2);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount * 2);
+        AtomicInteger deductSuccess = new AtomicInteger(0);
+
+        // 10 luồng trừ tiền bidder (mỗi lần 50 triệu)
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    if (userService.deductBidderBalance(bidder.getId(), 50_000_000)) {
+                        deductSuccess.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        // 10 luồng cộng doanh thu seller (mỗi lần 50 triệu)
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    userService.addSellerRevenue(seller.getId(), 50_000_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        doneLatch.await();
+        executor.shutdown();
+
+        Bidder updatedBidder = (Bidder) userService.findById(bidder.getId()).orElseThrow();
+        Seller updatedSeller = (Seller) userService.findById(seller.getId()).orElseThrow();
+
+        assertEquals(1_000_000_000.0 - deductSuccess.get() * 50_000_000,
+                updatedBidder.getBalance(), 0.01,
+                "Balance bidder phải khớp số lần trừ thành công");
+        assertEquals(threadCount * 50_000_000.0, updatedSeller.getTotalRevenue(), 0.01,
+                "Doanh thu seller phải đầy đủ — 2 user khác nhau không block lẫn nhau");
     }
 
     // ================================================================
