@@ -1,5 +1,6 @@
 package com.auction.network.handler;
 
+import com.auction.model.auction.Auction;
 import com.auction.model.item.Item;
 import com.auction.model.user.User;
 import com.auction.model.user.UserRole;
@@ -7,6 +8,8 @@ import com.auction.network.message.Message;
 import com.auction.network.message.Response;
 import com.auction.network.message.request.UpdateItemRequest;
 import com.auction.service.AuctionService;
+
+import java.util.List;
 
 /**
  * ============================================================================
@@ -53,7 +56,33 @@ public class UpdateItemHandler implements RequestHandler {
             return HandlerUtils.error("Bạn không có quyền chỉnh sửa sản phẩm này");
         }
 
+        // Kiểm tra nếu giá thay đổi → chặn khi đã có bid
+        var oldItem = auctionService.getItem(item.getId());
+        boolean priceChanged = oldItem.isPresent()
+                && oldItem.get().getStartingPrice() != item.getStartingPrice();
+
+        List<Auction> relatedAuctions = auctionService.getAllAuctions().stream()
+                .filter(a -> a.getItemId().equals(item.getId()))
+                .toList();
+
+        if (priceChanged) {
+            boolean hasBids = relatedAuctions.stream().anyMatch(a -> a.getTotalBids() > 0);
+            if (hasBids) {
+                return HandlerUtils.error("Không thể sửa giá — đã có người đặt giá cho sản phẩm này");
+            }
+        }
+
         auctionService.updateItem(item);
+
+        // Đồng bộ startingPrice sang auction (nếu giá thay đổi và chưa có bid)
+        if (priceChanged) {
+            for (Auction a : relatedAuctions) {
+                a.setStartingPrice(item.getStartingPrice());
+                a.setCurrentHighestBid(item.getStartingPrice());
+                auctionService.updateAuction(a);
+            }
+        }
+
         return Response.success();
     }
 }
