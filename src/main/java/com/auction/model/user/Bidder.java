@@ -53,12 +53,12 @@ public class Bidder extends User {
 
     /**
      * Constructor đầy đủ - dùng khi đăng ký Bidder mới.
-     * <p>Bidder mới được tặng {@code 10000.0} làm balance khởi tạo
+     * <p>Bidder mới được tặng {@code 1_000_000_000.0} làm balance khởi tạo
      * (demo mode - dự án bài tập, không có cổng thanh toán thật).
      */
     public Bidder(String username, String password, String email, String fullName) {
         super(username, password, email, fullName);
-        this.balance = 10000.0; // Số dư mặc định khi tạo tài khoản mới
+        this.balance = 1_000_000_000.0;
         this.wonAuctionIds = new ArrayList<>();
         this.participatingAuctionIds = new ArrayList<>();
     }

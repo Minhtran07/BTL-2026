@@ -1,12 +1,15 @@
 package com.auction.dao;
 
 import com.auction.exception.DataAccessException;
+import com.auction.util.PasswordUtils;
 
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDateTime;
 
 /**
  * ============================================================================
@@ -282,8 +285,31 @@ public final class DatabaseManager {
                 )
                 """);
 
+            seedAdmin(conn);
+
         } catch (SQLException e) {
             throw new DataAccessException("Khởi tạo schema SQLite thất bại", e);
+        }
+    }
+
+    private void seedAdmin(Connection conn) throws SQLException {
+        String check = "SELECT COUNT(*) FROM users WHERE username = 'admin'";
+        try (Statement st = conn.createStatement();
+             var rs = st.executeQuery(check)) {
+            if (rs.next() && rs.getInt(1) > 0) return;
+        }
+
+        String now = LocalDateTime.now().toString();
+        String sql = """
+            INSERT INTO users (id, username, password, email, full_name, role, active, balance, total_revenue, created_at, updated_at)
+            VALUES (?, 'admin', ?, 'admin@auction.local', 'Administrator', 'ADMIN', 1, 0, 0, ?, ?)
+            """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, java.util.UUID.randomUUID().toString());
+            ps.setString(2, PasswordUtils.hash("1234"));
+            ps.setString(3, now);
+            ps.setString(4, now);
+            ps.executeUpdate();
         }
     }
 }
