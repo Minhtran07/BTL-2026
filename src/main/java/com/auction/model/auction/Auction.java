@@ -445,6 +445,7 @@ public class Auction extends Entity {
     public void setStartingPrice(double startingPrice) { this.startingPrice = startingPrice; }
 
     public double getCurrentHighestBid() { return currentHighestBid; }
+    public void setCurrentHighestBid(double currentHighestBid) { this.currentHighestBid = currentHighestBid; }
     public String getCurrentHighestBidderId() { return currentHighestBidderId; }
     public String getCurrentHighestBidderName() { return currentHighestBidderName; }
 

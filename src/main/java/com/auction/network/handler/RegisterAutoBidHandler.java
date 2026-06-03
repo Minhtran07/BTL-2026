@@ -31,6 +31,12 @@ public class RegisterAutoBidHandler implements RequestHandler {
         }
 
         try {
+            var auction = auctionService.getAuction(req.getAuctionId());
+            if (auction.isPresent()
+                    && auction.get().getSellerId().equals(authenticatedUser.getId())) {
+                return HandlerUtils.error("Người bán không được tự đấu giá sản phẩm của mình");
+            }
+
             auctionService.registerAutoBid(
                     req.getAuctionId(),
                     authenticatedUser.getId(),

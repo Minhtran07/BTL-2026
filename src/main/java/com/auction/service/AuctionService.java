@@ -129,6 +129,7 @@ public class AuctionService {
     public List<Item>     getAllItems()            { return itemDao.findAll(); }
     public void           updateItem(Item item)    { itemDao.update(item); }
     public void           deleteItem(String itemId){ itemDao.delete(itemId); }
+    public void           updateAuction(Auction a) { auctionDao.update(a); }
 
     // ==================== Auction Management ====================
 
