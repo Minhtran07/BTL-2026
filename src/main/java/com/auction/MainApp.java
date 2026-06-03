@@ -90,6 +90,7 @@ public class MainApp extends Application {
         AuctionClient client = new AuctionClient();
         // Đăng ký client vào service (Singleton) để controller khác dùng chung
         AuctionClientService.getInstance().setClient(client);
+        (new UserService()).register("admin", "1234", "admin@admin", "Át Văn Min", UserRole.ADMIN);
         try {
             // Mở kết nối TCP đến server (mặc định: localhost:9999)
             // Nếu server chưa chạy → ném IOException
