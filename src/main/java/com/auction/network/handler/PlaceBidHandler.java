@@ -3,6 +3,7 @@ package com.auction.network.handler;
 import com.auction.exception.AuctionClosedException;
 import com.auction.exception.InvalidBidException;
 import com.auction.model.user.User;
+import com.auction.model.user.UserRole;
 import com.auction.network.message.Message;
 import com.auction.network.message.Response;
 import com.auction.network.message.request.PlaceBidRequest;
@@ -52,6 +53,9 @@ public class PlaceBidHandler implements RequestHandler {
     @Override
     public Message handle(Message request, User authenticatedUser) {
         if (authenticatedUser == null) return Response.error("Chưa đăng nhập");
+        if (authenticatedUser.getRole() == UserRole.ADMIN) {
+            return HandlerUtils.error("Admin không được phép đặt giá");
+        }
         if (!(request instanceof PlaceBidRequest bidReq)) {
             return HandlerUtils.error("Request không hợp lệ");
         }
