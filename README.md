@@ -93,7 +93,7 @@ mvn clean compile
 Server lắng nghe trên port **9999** (mặc định):
 
 ```bash
-mvn exec:java -Dexec.mainClass="com.auction.network.server.AuctionServer"
+mvn exec:java '-Dexec.mainClass=com.auction.network.server.AuctionServer'
 ```
 
 ### 3. Chạy Client (JavaFX)
