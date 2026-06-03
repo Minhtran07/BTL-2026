@@ -4,12 +4,12 @@ Bài tập lớn môn **Lập trình nâng cao** — Hệ thống đấu giá tr
 
 ## Thành viên nhóm
 
-| Thành viên | Nhiệm vụ chính |
-|---|---|
-| Trần Đăng Minh | Design Patterns (Factory, Singleton, Observer, Strategy), Exception |
-| Nguyễn Đình Phúc | DAO, Database (SQLite), Unit Test |
-| Nguyễn Ngọc Triệu | Service layer, Network layer |
-| Trịnh Tuấn Nghĩa | Controller, Giao diện JavaFX (FXML + CSS) |
+| Thành viên | Nhiệm vụ chính                                                            |
+|---|---------------------------------------------------------------------------|
+| Trần Đăng Minh | Design Patterns (Factory, Singleton, Observer, Strategy), Exception       |
+| Nguyễn Đình Phúc | DAO, Database (SQLite), Unit Test                                         |
+| Nguyễn Ngọc Triệu | Service layer, Network layer                                              |
+| Trịnh Tuấn Nghĩa | Controller, Giao diện JavaFX (FXML + CSS), Client Service (Network layer) |
 
 > Trần Đăng Minh & Trịnh Tuấn Nghĩa cùng phối hợp phần **Model** (Entity, User, Item, Auction, Transaction) do khối lượng lớn.
 
@@ -152,3 +152,5 @@ Lệnh này sẽ chạy toàn bộ unit test, kiểm tra code coverage (JaCoCo �
 | **Factory Method** | `ItemFactory`, `ItemCreator` | Tạo Item theo category (Art, Electronics, Vehicle) |
 | **Observer** | `AuctionEventDispatcher`, `AuctionObserver` | Phát sự kiện đấu giá realtime |
 | **Strategy** | `BidValidationStrategy` | Chiến lược validate giá đấu (Standard, ReservePrice) |
+
+### Link demo: https://drive.google.com/file/d/12eR5i6JsGocNh8R6ENK5rl6b1819diGn/view?usp=sharing
