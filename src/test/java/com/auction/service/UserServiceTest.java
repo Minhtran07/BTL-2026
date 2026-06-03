@@ -2,6 +2,8 @@ package com.auction.service;
 
 import com.auction.dao.UserDao;
 import com.auction.exception.AuthenticationException;
+import com.auction.model.user.Bidder;
+import com.auction.model.user.Seller;
 import com.auction.model.user.User;
 import com.auction.model.user.UserRole;
 import org.junit.jupiter.api.*;
@@ -167,6 +169,123 @@ class UserServiceTest {
         // Đăng nhập lại phải thất bại
         assertThrows(AuthenticationException.class, () ->
                 userService.login("henry", "pass1234"));
+    }
+
+    // ==================== Deduct Bidder Balance ====================
+
+    @Test
+    @DisplayName("Trừ tiền Bidder thành công khi đủ số dư")
+    void testDeductBidderBalance_Success() throws AuthenticationException {
+        User user = userService.register("bidder1", "pass1234",
+                "bidder1@test.com", "Bidder One", UserRole.BIDDER);
+        Bidder bidder = (Bidder) user;
+        double initialBalance = bidder.getBalance();
+
+        boolean result = userService.deductBidderBalance(user.getId(), 500_000);
+
+        assertTrue(result, "Trừ tiền phải thành công khi đủ số dư");
+        // Lấy lại từ DAO để xác nhận đã persist
+        Bidder updated = (Bidder) userService.findById(user.getId()).orElseThrow();
+        assertEquals(initialBalance - 500_000, updated.getBalance(), 0.01,
+                "Số dư phải giảm đúng số tiền đã trừ");
+    }
+
+    @Test
+    @DisplayName("Trừ tiền Bidder thất bại khi không đủ số dư")
+    void testDeductBidderBalance_InsufficientFunds() throws AuthenticationException {
+        User user = userService.register("bidder2", "pass1234",
+                "bidder2@test.com", "Bidder Two", UserRole.BIDDER);
+        Bidder bidder = (Bidder) user;
+        double initialBalance = bidder.getBalance();
+
+        // Trừ nhiều hơn số dư
+        boolean result = userService.deductBidderBalance(user.getId(), initialBalance + 1);
+
+        assertFalse(result, "Trừ tiền phải thất bại khi không đủ số dư");
+        Bidder updated = (Bidder) userService.findById(user.getId()).orElseThrow();
+        assertEquals(initialBalance, updated.getBalance(), 0.01,
+                "Số dư không được thay đổi khi trừ thất bại");
+    }
+
+    @Test
+    @DisplayName("Trừ tiền thất bại khi userId không phải Bidder")
+    void testDeductBidderBalance_NotBidder() throws AuthenticationException {
+        User seller = userService.register("seller_x", "pass1234",
+                "seller_x@test.com", "Seller X", UserRole.SELLER);
+
+        boolean result = userService.deductBidderBalance(seller.getId(), 1000);
+
+        assertFalse(result, "Trừ tiền phải thất bại khi user không phải Bidder");
+    }
+
+    @Test
+    @DisplayName("Trừ tiền thất bại khi userId không tồn tại")
+    void testDeductBidderBalance_NonExistentUser() {
+        boolean result = userService.deductBidderBalance("non-existent-id", 1000);
+
+        assertFalse(result, "Trừ tiền phải thất bại khi user không tồn tại");
+    }
+
+    @Test
+    @DisplayName("Trừ tiền Bidder - trừ toàn bộ số dư (edge case)")
+    void testDeductBidderBalance_ExactBalance() throws AuthenticationException {
+        User user = userService.register("bidder3", "pass1234",
+                "bidder3@test.com", "Bidder Three", UserRole.BIDDER);
+        Bidder bidder = (Bidder) user;
+        double initialBalance = bidder.getBalance();
+
+        boolean result = userService.deductBidderBalance(user.getId(), initialBalance);
+
+        assertTrue(result, "Trừ đúng bằng số dư phải thành công");
+        Bidder updated = (Bidder) userService.findById(user.getId()).orElseThrow();
+        assertEquals(0, updated.getBalance(), 0.01,
+                "Số dư phải bằng 0 sau khi trừ hết");
+    }
+
+    // ==================== Add Seller Revenue ====================
+
+    @Test
+    @DisplayName("Cộng doanh thu Seller thành công")
+    void testAddSellerRevenue_Success() throws AuthenticationException {
+        User user = userService.register("seller1", "pass1234",
+                "seller1@test.com", "Seller One", UserRole.SELLER);
+
+        userService.addSellerRevenue(user.getId(), 5_000_000);
+
+        Seller updated = (Seller) userService.findById(user.getId()).orElseThrow();
+        assertEquals(5_000_000, updated.getTotalRevenue(), 0.01,
+                "Doanh thu phải tăng đúng số tiền đã cộng");
+    }
+
+    @Test
+    @DisplayName("Cộng doanh thu nhiều lần - tích lũy đúng")
+    void testAddSellerRevenue_Accumulate() throws AuthenticationException {
+        User user = userService.register("seller2", "pass1234",
+                "seller2@test.com", "Seller Two", UserRole.SELLER);
+
+        userService.addSellerRevenue(user.getId(), 1_000_000);
+        userService.addSellerRevenue(user.getId(), 2_500_000);
+        userService.addSellerRevenue(user.getId(), 500_000);
+
+        Seller updated = (Seller) userService.findById(user.getId()).orElseThrow();
+        assertEquals(4_000_000, updated.getTotalRevenue(), 0.01,
+                "Doanh thu tích lũy phải bằng tổng các lần cộng");
+    }
+
+    @Test
+    @DisplayName("Cộng doanh thu cho Bidder - không lỗi nhưng không có effect")
+    void testAddSellerRevenue_NotSeller() throws AuthenticationException {
+        User bidder = userService.register("bidder_y", "pass1234",
+                "bidder_y@test.com", "Bidder Y", UserRole.BIDDER);
+
+        // Không ném exception, chỉ bỏ qua
+        assertDoesNotThrow(() -> userService.addSellerRevenue(bidder.getId(), 1000));
+    }
+
+    @Test
+    @DisplayName("Cộng doanh thu cho userId không tồn tại - không lỗi")
+    void testAddSellerRevenue_NonExistentUser() {
+        assertDoesNotThrow(() -> userService.addSellerRevenue("non-existent-id", 1000));
     }
 
     // ================================================================
