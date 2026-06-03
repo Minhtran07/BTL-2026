@@ -166,7 +166,7 @@ public class AuctionService {
         long endDelay = java.time.Duration.between(LocalDateTime.now(), endTime).toSeconds();
         if (endDelay > 0) {
             // Ta bảo Manager: "Đến giờ thì tự gọi hàm endAuction(auctionId) của tôi"
-            auctionRegistry.scheduleAuctionEnd(endDelay, () -> this.endAuction(auction.getId()));
+            auctionRegistry.scheduleAuctionEnd(endDelay, () -> this.scheduledEndAuction(auction.getId()));
         }
 
         auctionDao.save(auction);
@@ -412,6 +412,30 @@ public class AuctionService {
      *
      * <p>Thứ tự: finish() → settleAuction() → dispatch AUCTION_ENDED event.
      */
+    /**
+     * Callback cho scheduler: kiểm tra endTime trước khi đóng.
+     * Nếu anti-sniping đã gia hạn endTime → re-schedule thay vì đóng.
+     */
+    public void scheduledEndAuction(String auctionId) {
+        ReentrantLock lock = getLock(auctionId);
+        lock.lock();
+        try {
+            Auction auction = resolveAuction(auctionId);
+            if (auction == null || auction.getStatus() != AuctionStatus.RUNNING) return;
+
+            LocalDateTime now = LocalDateTime.now();
+            long secondsLeft = java.time.Duration.between(now, auction.getEndTime()).getSeconds();
+            if (secondsLeft > 0) {
+                auctionRegistry.scheduleAuctionEnd(secondsLeft,
+                        () -> this.scheduledEndAuction(auctionId));
+                return;
+            }
+        } finally {
+            lock.unlock();
+        }
+        endAuction(auctionId);
+    }
+
     public void endAuction(String auctionId) {
         ReentrantLock lock = getLock(auctionId);
         Auction auction;
