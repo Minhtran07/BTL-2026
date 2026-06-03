@@ -33,3 +33,6 @@ replay_pid*
 # Maven build output
 target/
 
+# Generated PDF reports
+*.pdf
+
