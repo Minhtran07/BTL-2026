@@ -5,6 +5,8 @@ import com.auction.SessionManager;
 import com.auction.model.item.ItemCategory;
 import com.auction.model.user.User;
 import com.auction.network.client.AuctionClientService;
+import com.auction.pattern.strategy.CategoryFormRegistry;
+import com.auction.pattern.strategy.CategoryFormStrategy;
 import javafx.fxml.FXML;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -13,7 +15,6 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -27,6 +28,10 @@ import java.util.Map;
  *       (Electronics → brand, model, condition; Art → artist, year, medium...)</li>
  *   <li>2 round-trip lên server: tạo Item trước → lấy itemId → tạo Auction</li>
  * </ul>
+ *
+ * <p><b>Strategy Pattern:</b> Mỗi danh mục sản phẩm có một
+ * {@link CategoryFormStrategy} riêng, chịu trách nhiệm tạo các field động
+ * và thu thập dữ liệu. Controller không cần biết chi tiết từng category.
  *
  * <p><b>Lưu ý:</b> Chỉ Seller mới truy cập được màn hình này (kiểm tra ở Dashboard).
  */
@@ -44,71 +49,35 @@ public class CreateAuctionController {
 
     private final AuctionClientService auctionClientService = AuctionClientService.getInstance();
 
-    // ===== Các field ĐỘNG (tạo runtime, có hoặc không tùy category) =====
-    // Electronics
-    private TextField brandField;
-    private TextField modelField;
-    private TextField conditionField;
-    // Art
-    private TextField artistField;
-    private TextField yearField; // dùng chung cho Art & Vehicle
-    private TextField mediumField;
-    // Vehicle
-    private TextField makeField;
-    private TextField vehicleModelField;
-    private TextField mileageField;
+    /** Strategy hiện tại - quyết định field nào hiển thị và cách thu thập data. */
+    private CategoryFormStrategy currentStrategy;
 
     /**
      * Initialize - chạy sau khi FXML load.
-     * Setup ComboBox category + listener thay đổi field theo lựa chọn.
+     * Setup ComboBox category + listener thay đổi strategy theo lựa chọn.
      */
     @FXML
     private void initialize() {
-        // Thêm 3 loại sản phẩm vào dropdown
-        categoryComboBox.getItems().addAll("Điện tử", "Nghệ thuật", "Phương tiện");
+        // Lấy danh sách category từ registry — không hardcode
+        categoryComboBox.getItems().addAll(CategoryFormRegistry.getRegisteredNames());
         categoryComboBox.getSelectionModel().selectFirst();
-        // Mỗi khi đổi lựa chọn → cập nhật các field động
-        categoryComboBox.setOnAction(e -> updateExtraFields());
-        updateExtraFields(); // hiển thị field cho category mặc định
+        // Mỗi khi đổi lựa chọn → đổi strategy → rebuild field
+        categoryComboBox.setOnAction(e -> applyStrategy());
+        applyStrategy(); // hiển thị field cho category mặc định
     }
 
     /**
-     * Cập nhật các field động theo category đã chọn.
-     * Xóa hết field cũ → thêm field mới phù hợp với category.
+     * Áp dụng strategy theo category đã chọn.
+     *
+     * <p><b>Strategy Pattern:</b> thay vì if-else kiểm tra category rồi tạo
+     * field thủ công, controller chỉ cần gọi {@code strategy.buildFields()}.
+     * Khi thêm danh mục mới, chỉ tạo class strategy mới mà không sửa controller.
      */
-    private void updateExtraFields() {
-        extraFieldsContainer.getChildren().clear(); // xóa tất cả field cũ
-        String category = categoryComboBox.getValue();
-
-        // Tạo field phù hợp với từng category
-        if ("Điện tử".equals(category)) {
-            brandField = addExtraField("Hãng sản xuất", "Ví dụ: Apple, Samsung");
-            modelField = addExtraField("Model", "Ví dụ: iPhone 15 Pro");
-            conditionField = addExtraField("Tình trạng", "NEW / LIKE_NEW / USED");
-        } else if ("Nghệ thuật".equals(category)) {
-            artistField = addExtraField("Nghệ sĩ", "Tên tác giả");
-            yearField = addExtraField("Năm sáng tác", "Ví dụ: 2024");
-            mediumField = addExtraField("Chất liệu", "Oil / Watercolor / Digital");
-        } else if ("Phương tiện".equals(category)) {
-            makeField = addExtraField("Hãng xe", "Ví dụ: Toyota, Honda");
-            vehicleModelField = addExtraField("Model xe", "Ví dụ: Camry 2.5Q");
-            yearField = addExtraField("Năm sản xuất", "Ví dụ: 2023");
-            mileageField = addExtraField("Số km đã đi", "Ví dụ: 15000");
-        }
-    }
-
-    /**
-     * Tạo 1 label + textfield và thêm vào extraFieldsContainer.
-     * Trả về TextField để controller giữ tham chiếu.
-     */
-    private TextField addExtraField(String label, String prompt) {
-        VBox box = new VBox(4); // box dọc với spacing 4px
-        Label lbl = new Label(label);
-        TextField field = new TextField();
-        field.setPromptText(prompt); // text placeholder
-        box.getChildren().addAll(lbl, field);
-        extraFieldsContainer.getChildren().add(box);
-        return field;
+    private void applyStrategy() {
+        extraFieldsContainer.getChildren().clear();
+        String categoryName = categoryComboBox.getValue();
+        currentStrategy = CategoryFormRegistry.of(categoryName);
+        currentStrategy.buildFields(extraFieldsContainer);
     }
 
     /**
@@ -149,29 +118,9 @@ public class CreateAuctionController {
                 return;
             }
 
-            // Chuyển String → enum ItemCategory
-            ItemCategory category;
-            String catStr = categoryComboBox.getValue();
-            if ("Điện tử".equals(catStr)) category = ItemCategory.ELECTRONICS;
-            else if ("Nghệ thuật".equals(catStr)) category = ItemCategory.ART;
-            else category = ItemCategory.VEHICLE;
-
-            // Build map extra fields theo category
-            Map<String, String> extra = new HashMap<>();
-            if (category == ItemCategory.ELECTRONICS) {
-                if (brandField != null) extra.put("brand", brandField.getText().trim());
-                if (modelField != null) extra.put("model", modelField.getText().trim());
-                if (conditionField != null) extra.put("condition", conditionField.getText().trim());
-            } else if (category == ItemCategory.ART) {
-                if (artistField != null) extra.put("artist", artistField.getText().trim());
-                if (yearField != null) extra.put("year", yearField.getText().trim());
-                if (mediumField != null) extra.put("medium", mediumField.getText().trim());
-            } else {
-                if (makeField != null) extra.put("make", makeField.getText().trim());
-                if (vehicleModelField != null) extra.put("vehicleModel", vehicleModelField.getText().trim());
-                if (yearField != null) extra.put("year", yearField.getText().trim());
-                if (mileageField != null) extra.put("mileage", mileageField.getText().trim());
-            }
+            // Strategy trả về category enum + extra data — không cần if-else
+            ItemCategory category = currentStrategy.getCategory();
+            Map<String, String> extra = currentStrategy.collectData();
 
             // ===== 2 ROUND-TRIPS LÊN SERVER =====
             // 1. Tạo Item → lấy itemId
